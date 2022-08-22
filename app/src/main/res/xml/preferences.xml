@@ -50,6 +50,11 @@
             android:title="@string/always_sendtokodi_addon"
             android:defaultValue="false"/>
 
+        <SwitchPreferenceCompat
+            android:key="pref_custom_seek_button"
+            android:title="@string/custom_seek_button"
+            android:defaultValue="true"/>
+
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/application">

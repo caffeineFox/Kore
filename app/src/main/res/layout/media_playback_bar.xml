@@ -63,4 +63,12 @@
         style="@style/Widget.Kore.Button.Borderless"
         android:src="@drawable/ic_round_skip_next_24"
         android:contentDescription="@string/next"/>
+    <ImageButton
+        android:id="@+id/seek_by"
+        android:layout_width="0dp"
+        android:layout_weight="1"
+        android:layout_height="match_parent"
+        style="@style/Widget.Kore.Button.Borderless"
+        android:src="@drawable/ic_round_next_plan_24"
+        android:contentDescription="@string/next"/>
 </merge>

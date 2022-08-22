@@ -16,6 +16,7 @@
 package org.xbmc.kore.ui.sections.remote;
 
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.Point;
 import android.os.Bundle;
 import android.text.TextUtils;
@@ -47,6 +48,7 @@ import org.xbmc.kore.jsonrpc.type.ListType;
 import org.xbmc.kore.jsonrpc.type.PlayerType;
 import org.xbmc.kore.service.MediaSessionService;
 import org.xbmc.kore.ui.BaseActivity;
+import org.xbmc.kore.ui.generic.CustomizeSeekDialogFragment;
 import org.xbmc.kore.ui.generic.NavigationDrawerFragment;
 import org.xbmc.kore.ui.generic.SendTextDialogFragment;
 import org.xbmc.kore.ui.generic.VolumeControllerDialogFragmentListener;
@@ -58,7 +60,8 @@ import org.xbmc.kore.utils.UIUtils;
 public class RemoteActivity extends BaseActivity
         implements HostConnectionObserver.PlayerEventsObserver,
         NowPlayingFragment.NowPlayingListener,
-        SendTextDialogFragment.SendTextDialogListener {
+        SendTextDialogFragment.SendTextDialogListener,
+        CustomizeSeekDialogFragment.CustomizeSeekDialogListener {
     private static final String TAG = LogUtils.makeLogTag(RemoteActivity.class);
 
     private static final int NOWPLAYING_FRAGMENT_ID = 1;
@@ -78,12 +81,31 @@ public class RemoteActivity extends BaseActivity
     private NavigationDrawerFragment navigationDrawerFragment;
 
     private ActivityRemoteBinding binding;
+    // Default page change listener, that doesn't scroll images
+    ViewPager.OnPageChangeListener defaultOnPageChangeListener = new ViewPager.OnPageChangeListener() {
+        @Override
+        public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {
+        }
+
+        @Override
+        public void onPageSelected(int position) {
+            setToolbarTitle(binding.includeToolbar.defaultToolbar, position);
+        }
+
+        @Override
+        public void onPageScrollStateChanged(int state) {
+        }
+    };
+    /**
+     * HostConnectionObserver.PlayerEventsObserver interface callbacks
+     */
+    private String lastImageUrl = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-       // Set default values for the preferences
+        // Set default values for the preferences
         PreferenceManager.setDefaultValues(this, R.xml.preferences, false);
 
         binding = ActivityRemoteBinding.inflate(getLayoutInflater());
@@ -101,7 +123,7 @@ public class RemoteActivity extends BaseActivity
             return;
         }
 
-       // Set up the drawer.
+        // Set up the drawer.
         navigationDrawerFragment = (NavigationDrawerFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.navigation_drawer);
         if (navigationDrawerFragment != null)
@@ -142,9 +164,9 @@ public class RemoteActivity extends BaseActivity
 
         // Check whether we should keep the remote activity above the lockscreen
         boolean keepAboveLockscreen = PreferenceManager
-            .getDefaultSharedPreferences(this)
-            .getBoolean(Settings.KEY_PREF_KEEP_REMOTE_ABOVE_LOCKSCREEN,
-                    Settings.DEFAULT_KEY_PREF_KEEP_REMOTE_ABOVE_LOCKSCREEN);
+                .getDefaultSharedPreferences(this)
+                .getBoolean(Settings.KEY_PREF_KEEP_REMOTE_ABOVE_LOCKSCREEN,
+                        Settings.DEFAULT_KEY_PREF_KEEP_REMOTE_ABOVE_LOCKSCREEN);
         if (keepAboveLockscreen) {
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED);
         } else {
@@ -155,7 +177,7 @@ public class RemoteActivity extends BaseActivity
         boolean keepScreenOn = PreferenceManager
                 .getDefaultSharedPreferences(this)
                 .getBoolean(Settings.KEY_PREF_KEEP_SCREEN_ON,
-                            Settings.DEFAULT_KEY_PREF_KEEP_SCREEN_ON);
+                        Settings.DEFAULT_KEY_PREF_KEEP_SCREEN_ON);
         if (keepScreenOn) {
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         } else {
@@ -233,6 +255,11 @@ public class RemoteActivity extends BaseActivity
             AudioLibrary.Scan actionScanAudio = new AudioLibrary.Scan();
             actionScanAudio.execute(hostManager.getConnection(), null, null);
             return true;
+        } else if (itemId == R.id.customize_seek_button) {
+            CustomizeSeekDialogFragment dialog =
+                    CustomizeSeekDialogFragment.newInstance(getString(R.string.customize_seek_button_title));
+            dialog.show(getSupportFragmentManager(), null);
+            return true;
         }
 
         return super.onOptionsItemSelected(item);
@@ -272,7 +299,6 @@ public class RemoteActivity extends BaseActivity
         // Nothing to do
     }
 
-
     private void setupActionBar() {
         setToolbarTitle(binding.includeToolbar.defaultToolbar, NOWPLAYING_FRAGMENT_ID);
         setSupportActionBar(binding.includeToolbar.defaultToolbar);
@@ -298,23 +324,9 @@ public class RemoteActivity extends BaseActivity
         }
     }
 
-
-    // Default page change listener, that doesn't scroll images
-    ViewPager.OnPageChangeListener defaultOnPageChangeListener = new ViewPager.OnPageChangeListener() {
-        @Override
-        public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) { }
-
-        @Override
-        public void onPageSelected(int position) {
-            setToolbarTitle(binding.includeToolbar.defaultToolbar, position);
-        }
-
-        @Override
-        public void onPageScrollStateChanged(int state) { }
-    };
-
     /**
      * Sets or clear the image background
+     *
      * @param url Image url
      */
     private void setImageViewBackground(String url) {
@@ -328,43 +340,39 @@ public class RemoteActivity extends BaseActivity
             final int pixelsPerPage = displaySize.x / 4;
 
             binding.backgroundImage.getViewTreeObserver()
-                                   .addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
-                @Override
-                public boolean onPreDraw() {
-                    binding.backgroundImage.getViewTreeObserver().removeOnPreDrawListener(this);
-                    // Position the image
-                    int offsetX =  (binding.pager.getCurrentItem() - 1) * pixelsPerPage;
-                    binding.backgroundImage.scrollTo(offsetX, 0);
-
-                    binding.pagerIndicator.setOnPageChangeListener(new ViewPager.OnPageChangeListener() {
+                    .addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
                         @Override
-                        public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {
-                            int offsetX = (int) ((position - 1 + positionOffset) * pixelsPerPage);
+                        public boolean onPreDraw() {
+                            binding.backgroundImage.getViewTreeObserver().removeOnPreDrawListener(this);
+                            // Position the image
+                            int offsetX = (binding.pager.getCurrentItem() - 1) * pixelsPerPage;
                             binding.backgroundImage.scrollTo(offsetX, 0);
-                        }
 
-                        @Override
-                        public void onPageSelected(int position) {
-                            setToolbarTitle(binding.includeToolbar.defaultToolbar, position);
-                        }
+                            binding.pagerIndicator.setOnPageChangeListener(new ViewPager.OnPageChangeListener() {
+                                @Override
+                                public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {
+                                    int offsetX = (int) ((position - 1 + positionOffset) * pixelsPerPage);
+                                    binding.backgroundImage.scrollTo(offsetX, 0);
+                                }
 
-                        @Override
-                        public void onPageScrollStateChanged(int state) { }
+                                @Override
+                                public void onPageSelected(int position) {
+                                    setToolbarTitle(binding.includeToolbar.defaultToolbar, position);
+                                }
+
+                                @Override
+                                public void onPageScrollStateChanged(int state) {
+                                }
+                            });
+
+                            return true;
+                        }
                     });
-
-                    return true;
-                }
-            });
         } else {
             binding.backgroundImage.setImageDrawable(null);
             binding.pagerIndicator.setOnPageChangeListener(defaultOnPageChangeListener);
         }
     }
-
-    /**
-     * HostConnectionObserver.PlayerEventsObserver interface callbacks
-     */
-    private String lastImageUrl = null;
 
     @Override
     public void playerOnPropertyChanged(org.xbmc.kore.jsonrpc.notification.Player.NotificationsData notificationsData) {
@@ -417,12 +425,34 @@ public class RemoteActivity extends BaseActivity
         dialog.show(getSupportFragmentManager(), null);
     }
 
-    public void observerOnStopObserving() {}
+    public void observerOnStopObserving() {
+    }
 
     /**
      * Now playing fragment listener
      */
     public void SwitchToRemotePanel() {
         binding.pager.setCurrentItem(1);
+    }
+
+    @Override
+    public void onCustomizeSeekFinished(String time, PlayerType.KindOfSeek kindOfSeek) {
+        SharedPreferences.Editor sharedPreferencesEditor = PreferenceManager.getDefaultSharedPreferences(this).edit();
+        int seekTime;
+        if (time.contains(":") && time.length() < 6 && time.length() > 3) {
+            String[] mmss = time.split(":");
+            seekTime = new PlayerType.PositionTime(0, Integer.parseInt(mmss[0]), Integer.parseInt(mmss[1]), 0).toSeconds();
+        } else {
+            seekTime = Integer.parseInt(time);
+        }
+        int seekKind = PlayerType.KindOfSeek.JUMP_BY.equals(kindOfSeek) ? 0 : 1;
+        sharedPreferencesEditor.putInt(Settings.KEY_PREF_CUSTOM_SEEK_KIND, seekKind);
+        sharedPreferencesEditor.putInt(Settings.KEY_PREF_CUSTOM_SEEK_TIME, seekTime);
+        sharedPreferencesEditor.apply();
+    }
+
+    @Override
+    public void onCustomizeSeekCancel() {
+
     }
 }

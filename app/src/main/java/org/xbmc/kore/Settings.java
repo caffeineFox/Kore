@@ -18,8 +18,9 @@ package org.xbmc.kore;
 import android.app.DownloadManager;
 import android.content.Context;
 import android.content.SharedPreferences;
-import androidx.preference.PreferenceManager;
 import android.text.format.DateUtils;
+
+import androidx.preference.PreferenceManager;
 
 import org.xbmc.kore.utils.LogUtils;
 
@@ -148,6 +149,18 @@ public class Settings {
     // Vibrate on remote button press
     public static final String KEY_PREF_VIBRATE_REMOTE_BUTTONS = "pref_vibrate_remote_buttons";
     public static final boolean DEFAULT_PREF_VIBRATE_REMOTE_BUTTONS = false;
+
+    // Show customizable skip button
+    public static final String KEY_PREF_CUSTOM_SEEK_BUTTON = "pref_custom_seek_button";
+    public static final boolean DEFAULT_PREF_CUSTOM_SEEK_BUTTON = true;
+
+    // Custom skip button kind
+    public static final String KEY_PREF_CUSTOM_SEEK_KIND = "pref_custom_seek_kind";
+    public static final int DEFAULT_PREF_CUSTOM_SEEK_KIND = 0;
+
+    // Custom skip button time
+    public static final String KEY_PREF_CUSTOM_SEEK_TIME = "pref_custom_seek_time";
+    public static final int DEFAULT_PREF_CUSTOM_SEEK_TIME = 10;
 
     // Current host id
     public static final String KEY_PREF_CURRENT_HOST_ID = "current_host_id";

@@ -1,16 +1,21 @@
 package org.xbmc.kore.ui.widgets;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.res.TypedArray;
 import android.util.AttributeSet;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.LinearLayout;
 
+import androidx.preference.PreferenceManager;
+
 import org.xbmc.kore.R;
+import org.xbmc.kore.Settings;
 import org.xbmc.kore.databinding.MediaPlaybackBarBinding;
 import org.xbmc.kore.host.HostConnection;
 import org.xbmc.kore.host.HostManager;
+import org.xbmc.kore.jsonrpc.ApiCallback;
 import org.xbmc.kore.jsonrpc.method.Player;
 import org.xbmc.kore.jsonrpc.type.GlobalType;
 import org.xbmc.kore.jsonrpc.type.PlayerType;
@@ -64,7 +69,7 @@ public class MediaPlaybackBar extends LinearLayout {
     private void initializeView(Context context) {
         LayoutInflater inflater = (LayoutInflater) context.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
         binding = MediaPlaybackBarBinding.inflate(inflater, this);
-
+        SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getContext());
         connection = HostManager.getInstance(context).getConnection();
         binding.play.setOnClickListener(v -> {
             new Player.PlayPause(activePlayerId)
@@ -90,6 +95,44 @@ public class MediaPlaybackBar extends LinearLayout {
             new Player.GoTo(activePlayerId, Player.GoTo.NEXT)
                     .execute(connection, null, null);
         });
+        binding.seekBy.setOnClickListener(v -> {
+            PlayerType.KindOfSeek kindOfSeek = sharedPreferences.getInt(
+                    Settings.KEY_PREF_CUSTOM_SEEK_KIND,
+                    Settings.DEFAULT_PREF_CUSTOM_SEEK_KIND) == 0
+                    ? PlayerType.KindOfSeek.JUMP_BY
+                    : PlayerType.KindOfSeek.JUMP_TO;
+            if (PlayerType.KindOfSeek.JUMP_TO.equals(kindOfSeek)) {
+                PlayerType.PositionTime seekTime = new PlayerType.PositionTime(sharedPreferences.getInt(
+                        Settings.KEY_PREF_CUSTOM_SEEK_TIME, Settings.DEFAULT_PREF_CUSTOM_SEEK_TIME));
+                new Player.Seek(activePlayerId, seekTime).execute(connection, null, null);
+            } else {
+                new Player.GetProperties(activePlayerId, PlayerType.PropertyName.TIME).execute(connection, new ApiCallback<PlayerType.PropertyValue>() {
+                    @Override
+                    public void onSuccess(PlayerType.PropertyValue result) {
+                        if (result.time != null) {
+                            PlayerType.PositionTime seekTime = new PlayerType.PositionTime(sharedPreferences.getInt(
+                                    Settings.KEY_PREF_CUSTOM_SEEK_TIME, Settings.DEFAULT_PREF_CUSTOM_SEEK_TIME) + result.time.toSeconds());
+                            new Player.Seek(activePlayerId, seekTime).execute(connection, new ApiCallback<PlayerType.SeekReturnType>() {
+                                @Override
+                                public void onSuccess(PlayerType.SeekReturnType result) {
+                                    HostManager.getInstance(context).getHostConnectionObserver().refreshWhatsPlaying();
+                                }
+
+                                @Override
+                                public void onError(int errorCode, String description) {
+                                    HostManager.getInstance(context).getHostConnectionObserver().refreshWhatsPlaying();
+                                }
+                            }, null);
+                        }
+                    }
+
+                    @Override
+                    public void onError(int errorCode, String description) {
+
+                    }
+                }, null);
+            }
+        });
     }
 
     @Override
@@ -98,7 +141,9 @@ public class MediaPlaybackBar extends LinearLayout {
         binding = null;
     }
 
-    public int getViewMode() { return viewMode; }
+    public int getViewMode() {
+        return viewMode;
+    }
 
     public void setViewMode(int viewMode) {
         this.viewMode = viewMode;
@@ -113,6 +158,10 @@ public class MediaPlaybackBar extends LinearLayout {
         binding.previous.setVisibility(View.VISIBLE);
         binding.fastForward.setVisibility(View.VISIBLE);
         binding.rewind.setVisibility(View.VISIBLE);
+        binding.seekBy.setVisibility(PreferenceManager
+                .getDefaultSharedPreferences(getContext())
+                .getBoolean(Settings.KEY_PREF_CUSTOM_SEEK_BUTTON,
+                        Settings.DEFAULT_PREF_CUSTOM_SEEK_BUTTON) ? View.VISIBLE : View.GONE);
 
         if (viewMode == VIEW_MODE_NO_STOP_BUTTON) {
             binding.stop.setVisibility(View.GONE);
@@ -129,8 +178,9 @@ public class MediaPlaybackBar extends LinearLayout {
 
     /**
      * Update the playback state. This needs to be called when the playback state of Kodi changes
+     *
      * @param getActivePlayersResult Current active player id
-     * @param speed Playback speed
+     * @param speed                  Playback speed
      */
     public void setPlaybackState(PlayerType.GetActivePlayersReturnType getActivePlayersResult, int speed) {
         this.activePlayerId = getActivePlayersResult.playerid;
