@@ -926,6 +926,7 @@ public class HostConnectionObserver
                                           final PlayerType.PropertyValue getPropertiesResult,
                                           final ListType.ItemsAll getItemResult,
                                           PlayerEventsObserver observer) {
+        checkingWhatsPlaying = false;
         if (getPropertiesResult.speed == 0) {
             // Paused
             observer.playerOnPause(getActivePlayersResult, getPropertiesResult, getItemResult);

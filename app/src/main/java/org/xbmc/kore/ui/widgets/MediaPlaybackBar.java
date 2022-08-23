@@ -104,7 +104,17 @@ public class MediaPlaybackBar extends LinearLayout {
             if (PlayerType.KindOfSeek.JUMP_TO.equals(kindOfSeek)) {
                 PlayerType.PositionTime seekTime = new PlayerType.PositionTime(sharedPreferences.getInt(
                         Settings.KEY_PREF_CUSTOM_SEEK_TIME, Settings.DEFAULT_PREF_CUSTOM_SEEK_TIME));
-                new Player.Seek(activePlayerId, seekTime).execute(connection, null, null);
+                new Player.Seek(activePlayerId, seekTime).execute(connection, new ApiCallback<PlayerType.SeekReturnType>() {
+                    @Override
+                    public void onSuccess(PlayerType.SeekReturnType result) {
+                        HostManager.getInstance(context).getHostConnectionObserver().refreshWhatsPlaying();
+                    }
+
+                    @Override
+                    public void onError(int errorCode, String description) {
+                        HostManager.getInstance(context).getHostConnectionObserver().refreshWhatsPlaying();
+                    }
+                }, null);
             } else {
                 new Player.GetProperties(activePlayerId, PlayerType.PropertyName.TIME).execute(connection, new ApiCallback<PlayerType.PropertyValue>() {
                     @Override
