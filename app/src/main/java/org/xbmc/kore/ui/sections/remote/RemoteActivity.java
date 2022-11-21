@@ -23,12 +23,17 @@ import android.text.TextUtils;
 import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.view.WindowManager;
 
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.text.TextDirectionHeuristicsCompat;
+import androidx.core.view.OnApplyWindowInsetsListener;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.preference.PreferenceManager;
 import androidx.viewpager2.widget.ViewPager2;
 
@@ -67,37 +72,20 @@ public class RemoteActivity
     private static final int NOWPLAYING_FRAGMENT_ID = 1;
     private static final int REMOTE_FRAGMENT_ID = 2;
     private static final int PLAYLIST_FRAGMENT_ID = 3;
-    OnApplyWindowInsetsListener bottomInsetsListener = (v, windowInsets) -> {
-        ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) v.getLayoutParams();
-        mlp.bottomMargin = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom;
-        v.setLayoutParams(mlp);
-        return windowInsets;
-    };
+
     /**
      * Host manager singleton
      */
     private HostManager hostManager = null;
+
     /**
      * To register for observing host events
      */
     private HostConnectionObserver hostConnectionObserver;
+
     private NavigationDrawerFragment navigationDrawerFragment;
+
     private ActivityRemoteBinding binding;
-    // Default page change listener, that doesn't scroll images
-    ViewPager.OnPageChangeListener defaultOnPageChangeListener = new ViewPager.OnPageChangeListener() {
-        @Override
-        public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {
-        }
-
-        @Override
-        public void onPageSelected(int position) {
-            setToolbarTitle(binding.includeToolbar.defaultToolbar, position);
-        }
-
-        @Override
-        public void onPageScrollStateChanged(int state) {
-        }
-    };
     // Default page change listener, that doesn't scroll images
     ViewPager2.OnPageChangeCallback defaultOnPageChangeCallback = new ViewPager2.OnPageChangeCallback() {
         @Override
@@ -105,34 +93,10 @@ public class RemoteActivity
             setToolbarTitle(binding.defaultToolbar, position);
         }
     };
-    binding =ActivityRemoteBinding.inflate(
     /**
      * HostConnectionObserver.PlayerEventsObserver interface callbacks
      */
-    private String lastImageUrl = null;);
-
-    {
-        ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) v.getLayoutParams();
-        mlp.topMargin = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars()).top;
-        v.setLayoutParams(mlp);
-        return windowInsets;
-    });
-
-    // Set activity to full screen and protect the top app bar and the content from the top/bottom insets
-        WindowCompat.setDecorFitsSystemWindows(
-
-    getLayoutInflater() false);
-
-        ViewCompat.setOnApplyWindowInsetsListener(binding.defaultToolbar,(v,windowInsets)->
-
-    setContentView(binding.getRoot());
-
-getWindow(),
-
-        ViewCompat.setOnApplyWindowInsetsListener(binding.pager,bottomInsetsListener);
-        ViewCompat.setOnApplyWindowInsetsListener(binding.navigationDrawer,bottomInsetsListener);
-
-    // Set up the drawer.
+    private String lastImageUrl = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -152,6 +116,29 @@ getWindow(),
             finish();
             return;
         }
+
+        binding = ActivityRemoteBinding.inflate(getLayoutInflater());
+        setContentView(binding.getRoot());
+
+        // Set activity to full screen and protect the top app bar and the content from the top/bottom insets
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+
+        ViewCompat.setOnApplyWindowInsetsListener(binding.defaultToolbar, (v, windowInsets) -> {
+            ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) v.getLayoutParams();
+            mlp.topMargin = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars()).top;
+            v.setLayoutParams(mlp);
+            return windowInsets;
+        });
+
+        OnApplyWindowInsetsListener bottomInsetsListener = (v, windowInsets) -> {
+            ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) v.getLayoutParams();
+            mlp.bottomMargin = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom;
+            v.setLayoutParams(mlp);
+            return windowInsets;
+        };
+
+        ViewCompat.setOnApplyWindowInsetsListener(binding.pager, bottomInsetsListener);
+        ViewCompat.setOnApplyWindowInsetsListener(binding.navigationDrawer, bottomInsetsListener);
 
         // Set up the drawer.
         navigationDrawerFragment = (NavigationDrawerFragment) getSupportFragmentManager()
@@ -458,7 +445,6 @@ getWindow(),
 
     @Override
     public void onCustomizeSeekFinished(String time, PlayerType.KindOfSeek kindOfSeek) {
-        SharedPreferences.Editor sharedPreferencesEditor = PreferenceManager.getDefaultSharedPreferences(this).edit();
         int seekTime;
         if (time.contains(":") && time.length() < 6 && time.length() > 3) {
             String[] mmss = time.split(":");
@@ -467,6 +453,7 @@ getWindow(),
             seekTime = Integer.parseInt(time);
         }
         int seekKind = PlayerType.KindOfSeek.JUMP_BY.equals(kindOfSeek) ? 0 : 1;
+        SharedPreferences.Editor sharedPreferencesEditor = PreferenceManager.getDefaultSharedPreferences(this).edit();
         sharedPreferencesEditor.putInt(Settings.KEY_PREF_CUSTOM_SEEK_KIND, seekKind);
         sharedPreferencesEditor.putInt(Settings.KEY_PREF_CUSTOM_SEEK_TIME, seekTime);
         sharedPreferencesEditor.apply();
