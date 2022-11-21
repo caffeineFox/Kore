@@ -16,12 +16,11 @@
 package org.xbmc.kore.ui.sections.video;
 
 import android.os.Bundle;
-import android.transition.TransitionInflater;
 import android.view.MenuItem;
+import android.widget.ImageView;
 
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
-import androidx.fragment.app.FragmentTransaction;
 
 import org.xbmc.kore.R;
 import org.xbmc.kore.ui.AbstractFragment;
@@ -108,17 +107,13 @@ public class TVShowsActivity extends BaseMediaActivity
 
     /**
      * Callback from tvshows list fragment when a show is selected.
-     * Switch fragment in portrait
-     * @param vh view holder
      */
-    public void onTVShowSelected(TVShowListFragment.ViewHolder vh) {
-        selectedTVShowId = vh.dataHolder.getId();
-        selectedTVShowTitle = vh.dataHolder.getTitle();
+    public void onTVShowSelected(AbstractFragment.DataHolder dataHolder, ImageView sharedImageView) {
+        selectedTVShowId = dataHolder.getId();
+        selectedTVShowTitle = dataHolder.getTitle();
 
         // Replace list fragment
-        final TVShowInfoFragment tvshowDetailsFragment = new TVShowInfoFragment();
-        tvshowDetailsFragment.setDataHolder(vh.dataHolder);
-        showFragment(tvshowDetailsFragment, vh.artView, vh.dataHolder);
+        showFragment(TVShowInfoFragment.class, dataHolder.getBundle(), sharedImageView);
         updateActionBar(selectedTVShowTitle, true);
     }
 
@@ -131,14 +126,12 @@ public class TVShowsActivity extends BaseMediaActivity
         selectedSeason = seasonId;
 
         // Replace fragment
-        TVShowEpisodeListFragment fragment =
-                TVShowEpisodeListFragment.newInstance(selectedTVShowId, seasonId, seasonPoster);
-        getSupportFragmentManager()
-                .beginTransaction()
-                .setCustomAnimations(R.anim.fragment_details_enter, 0, R.anim.fragment_list_popenter, 0)
-                .replace(R.id.fragment_container, fragment)
-                .addToBackStack(null)
-                .commit();
+        Bundle args = new Bundle();
+        args.putInt(TVShowEpisodeListFragment.TVSHOWID, tvshowId);
+        args.putInt(TVShowEpisodeListFragment.TVSHOWSEASON, seasonId);
+        args.putString(TVShowEpisodeListFragment.TVSHOWSEASONPOSTERURL, seasonPoster);
+        showFragment(TVShowEpisodeListFragment.class, args);
+
         selectedSeasonTitle = String.format(getString(R.string.season_number), seasonId);
         updateActionBar(selectedSeasonTitle, true);
     }
@@ -146,43 +139,27 @@ public class TVShowsActivity extends BaseMediaActivity
     /**
      * Callback from tvshow details when a episode is selected
      */
-    public void onNextEpisodeSelected(int tvshowId,
-                                      AbstractInfoFragment.DataHolder dh) {
-        selectedEpisodeId = dh.getId();
+    public void onNextEpisodeSelected(int tvshowId, AbstractInfoFragment.DataHolder dataHolder) {
+        selectedEpisodeId = dataHolder.getId();
 
         // Replace list fragment
-        TVShowEpisodeInfoFragment fragment = new TVShowEpisodeInfoFragment();
-        fragment.setDataHolder(dh);
-        fragment.setTvshowId(tvshowId);
-        startFragment(fragment);
+        Bundle args = dataHolder.getBundle();
+        args.putInt(TVShowEpisodeInfoFragment.BUNDLE_KEY_TVSHOWID, tvshowId);
+        showFragment(TVShowEpisodeInfoFragment.class, args);
+
         updateActionBar(selectedTVShowTitle, true);
     }
 
     /**
      * Callback from tvshow episodes list when a episode is selected
      */
-    public void onEpisodeSelected(int tvshowId,
-                                  TVShowEpisodeListFragment.ViewHolder viewHolder) {
-        selectedEpisodeId = viewHolder.dataHolder.getId();
-        TVShowEpisodeInfoFragment fragment = new TVShowEpisodeInfoFragment();
-        fragment.setDataHolder(viewHolder.dataHolder);
-        fragment.setTvshowId(tvshowId);
-        startFragment(fragment);
+    public void onEpisodeSelected(int tvshowId, AbstractInfoFragment.DataHolder dataHolder) {
+        selectedEpisodeId = dataHolder.getId();
+
+        dataHolder.getBundle().putInt(TVShowEpisodeInfoFragment.BUNDLE_KEY_TVSHOWID, tvshowId);
+        showFragment(TVShowEpisodeInfoFragment.class, dataHolder.getBundle());
+
         updateActionBar(selectedTVShowTitle, true);
-    }
-
-    private void startFragment(AbstractFragment fragment) {
-        // Replace list fragment
-        FragmentTransaction fragTrans = getSupportFragmentManager().beginTransaction();
-
-        // Set up transitions
-            fragment.setEnterTransition(TransitionInflater.from(this)
-                                                          .inflateTransition(R.transition.media_details));
-        fragment.setReturnTransition(null);
-
-        fragTrans.replace(R.id.fragment_container, fragment)
-                 .addToBackStack(null)
-                 .commit();
     }
 
     private void updateActionBar() {

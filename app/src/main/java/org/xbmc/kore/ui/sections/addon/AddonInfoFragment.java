@@ -20,13 +20,10 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.preference.PreferenceManager;
-
-import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import org.xbmc.kore.R;
 import org.xbmc.kore.Settings;
@@ -34,10 +31,10 @@ import org.xbmc.kore.host.HostManager;
 import org.xbmc.kore.jsonrpc.ApiCallback;
 import org.xbmc.kore.jsonrpc.method.Addons;
 import org.xbmc.kore.jsonrpc.type.AddonType;
-import org.xbmc.kore.ui.AbstractAdditionalInfoFragment;
+import org.xbmc.kore.ui.AbstractFragment;
 import org.xbmc.kore.ui.AbstractInfoFragment;
-import org.xbmc.kore.ui.generic.RefreshItem;
 import org.xbmc.kore.utils.LogUtils;
+import org.xbmc.kore.utils.UIUtils;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -69,15 +66,17 @@ public class AddonInfoFragment extends AbstractInfoFragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
         setHasOptionsMenu(false);
+        updateView(getDataHolder());
     }
 
     @Override
-    protected AbstractAdditionalInfoFragment getAdditionalInfoFragment() {
+    protected AbstractFragment getAdditionalInfoFragment() {
         return null;
     }
 
     @Override
-    protected RefreshItem createRefreshItem() {
+    protected String getSyncType() {
+        // Don't start refresh on details screen
         return null;
     }
 
@@ -93,8 +92,8 @@ public class AddonInfoFragment extends AbstractInfoFragment {
     }
 
     @Override
-    protected boolean setupFAB(FloatingActionButton fab) {
-        fab.setOnClickListener(v -> {
+    protected View.OnClickListener getFABClickListener() {
+        return (v -> {
             Addons.ExecuteAddon action = new Addons.ExecuteAddon(addonId);
             action.execute(getHostManager().getConnection(), new ApiCallback<String>() {
                 @Override
@@ -104,14 +103,12 @@ public class AddonInfoFragment extends AbstractInfoFragment {
 
                 @Override
                 public void onError(int errorCode, String description) {
-                    if (!isAdded()) return;
+                    if (!isResumed()) return;
                     // Got an error, show toast
-                    Toast.makeText(getActivity(), R.string.unable_to_connect_to_xbmc, Toast.LENGTH_SHORT)
-                         .show();
+                    UIUtils.showSnackbar(getView(), R.string.unable_to_connect_to_xbmc);
                 }
             }, callbackHandler);
         });
-        return true;
     }
 
     private void setupEnabledButton() {
@@ -122,20 +119,17 @@ public class AddonInfoFragment extends AbstractInfoFragment {
             action.execute(getHostManager().getConnection(), new ApiCallback<String>() {
                 @Override
                 public void onSuccess(String result) {
-                    if (!isAdded()) return;
+                    if (!isResumed()) return;
                     int messageResId = (!isEnabled) ? R.string.addon_enabled : R.string.addon_disabled;
-                    Toast.makeText(requireContext(), messageResId, Toast.LENGTH_SHORT).show();
+                    UIUtils.showSnackbar(getView(), messageResId);
                     setEnableButtonState(!isEnabled);
                     setFabState(!isEnabled);
                 }
 
                 @Override
                 public void onError(int errorCode, String description) {
-                    if (!isAdded()) return;
-                    Toast.makeText(requireContext(),
-                                   String.format(getString(R.string.general_error_executing_action), description),
-                                   Toast.LENGTH_SHORT)
-                         .show();
+                    if (!isResumed()) return;
+                    UIUtils.showSnackbar(getView(), String.format(getString(R.string.general_error_executing_action), description));
                 }
             }, callbackHandler);
         });
@@ -149,18 +143,12 @@ public class AddonInfoFragment extends AbstractInfoFragment {
         action.execute(getHostManager().getConnection(), new ApiCallback<AddonType.Details>() {
             @Override
             public void onSuccess(AddonType.Details result) {
-                if (!isAdded()) return;
                 setEnableButtonState(result.enabled);
                 setFabState(result.enabled);
             }
 
             @Override
-            public void onError(int errorCode, String description) {
-                if (!isAdded()) return;
-                Toast.makeText(getActivity(),
-                               String.format(getString(R.string.error_getting_addon_info), description),
-                               Toast.LENGTH_SHORT).show();
-            }
+            public void onError(int errorCode, String description) { }
         }, callbackHandler);
     }
 
@@ -182,7 +170,7 @@ public class AddonInfoFragment extends AbstractInfoFragment {
                  .putStringSet(Settings.getBookmarkedAddonsPrefKey(hostId), bookmarks)
                  .putString(Settings.getNameBookmarkedAddonsPrefKey(hostId) + path, name)
                  .apply();
-            Toast.makeText(getActivity(), !isBookmarked ? R.string.addon_pinned : R.string.addon_unpinned, Toast.LENGTH_SHORT).show();
+            UIUtils.showSnackbar(getView(), !isBookmarked ? R.string.addon_pinned : R.string.addon_unpinned);
             setPinButtonState(!isBookmarked);
         });
 

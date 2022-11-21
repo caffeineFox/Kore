@@ -25,6 +25,7 @@ import android.view.ViewGroup;
 import android.widget.ImageButton;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.preference.PreferenceManager;
 
@@ -124,8 +125,14 @@ public class RemoteFragment extends Fragment
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         binding = FragmentRemoteBinding.inflate(inflater, container, false);
-        ViewGroup root = binding.getRoot();
+        return binding.getRoot();
+    }
 
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+
+        // Setup view
         binding.remote.setOnPadButtonsListener(this);
         binding.mediaActionsBar.completeSetup(requireContext(), this.getParentFragmentManager());
 
@@ -136,7 +143,7 @@ public class RemoteFragment extends Fragment
         Set<String> shownItems = PreferenceManager
                 .getDefaultSharedPreferences(requireContext())
                 .getStringSet(Settings.getRemoteBarItemsPrefKey(hostInfo.getId()),
-                        new HashSet<>(Arrays.asList(getResources().getStringArray(R.array.default_values_remote_bar_items))));
+                              new HashSet<>(Arrays.asList(getResources().getStringArray(R.array.default_values_remote_bar_items))));
         ImageButton[] buttons = {
                 binding.home, binding.movies, binding.tvShows, binding.music, binding.pvr, binding.pictures,
                 binding.videos, binding.addons, binding.weather, binding.system
@@ -164,13 +171,13 @@ public class RemoteFragment extends Fragment
         UIUtils.tintElevatedView(binding.sectionsButtonBar);
         binding.title.setClickable(true);
         binding.title.setOnClickListener(v -> v.setSelected(!v.isSelected()));
-
-        return root;
+        binding.includeInfoPanel.infoPanel.setVisibility(View.VISIBLE);
+        binding.mediaPanel.setVisibility(View.GONE);
     }
 
     @Override
-    public void onResume() {
-        super.onResume();
+    public void onStart() {
+        super.onStart();
         hostConnectionObserver.registerPlayerObserver(this);
         hostConnectionObserver.registerApplicationObserver(this);
         if (eventServerConnection == null)
@@ -178,14 +185,14 @@ public class RemoteFragment extends Fragment
     }
 
     @Override
-    public void onPause() {
-        super.onPause();
+    public void onStop() {
         hostConnectionObserver.unregisterPlayerObserver(this);
         hostConnectionObserver.unregisterApplicationObserver(this);
         if (eventServerConnection != null) {
             eventServerConnection.quit();
             eventServerConnection = null;
         }
+        super.onStop();
     }
 
     @Override
@@ -215,7 +222,7 @@ public class RemoteFragment extends Fragment
     }
 
     @Override
-    public void playerOnPropertyChanged(org.xbmc.kore.jsonrpc.notification.Player.NotificationsData notificationsData) {
+    public void onPlayerPropertyChanged(org.xbmc.kore.jsonrpc.notification.Player.NotificationsData notificationsData) {
         binding.mediaActionsBar.setRepeatShuffleState(notificationsData.property.repeatMode,
                                                       notificationsData.property.shuffled,
                                                       notificationsData.property.partymode);
@@ -224,19 +231,19 @@ public class RemoteFragment extends Fragment
     /**
      * HostConnectionObserver.PlayerEventsObserver interface callbacks
      */
-    public void playerOnPlay(PlayerType.GetActivePlayersReturnType getActivePlayerResult,
+    public void onPlayerPlay(PlayerType.GetActivePlayersReturnType getActivePlayerResult,
                              PlayerType.PropertyValue getPropertiesResult,
                              ListType.ItemsAll getItemResult) {
         setNowPlayingInfo(getActivePlayerResult, getPropertiesResult, getItemResult);
     }
 
-    public void playerOnPause(PlayerType.GetActivePlayersReturnType getActivePlayerResult,
+    public void onPlayerPause(PlayerType.GetActivePlayersReturnType getActivePlayerResult,
                               PlayerType.PropertyValue getPropertiesResult,
                               ListType.ItemsAll getItemResult) {
         setNowPlayingInfo(getActivePlayerResult, getPropertiesResult, getItemResult);
     }
 
-    public void playerOnStop() {
+    public void onPlayerStop() {
         stopNowPlayingInfo();
         switchToPanel(R.id.info_panel);
         HostInfo hostInfo = hostManager.getHostInfo();
@@ -244,12 +251,12 @@ public class RemoteFragment extends Fragment
         binding.includeInfoPanel.infoMessage.setText(String.format(getString(R.string.connected_to), hostInfo.getName()));
     }
 
-    public void playerOnConnectionError(int errorCode, String description) {
+    public void onPlayerConnectionError(int errorCode, String description) {
         stopNowPlayingInfo();
         switchToPanel(R.id.info_panel);
         HostInfo hostInfo = hostManager.getHostInfo();
         if (hostInfo != null) {
-            binding.includeInfoPanel.infoTitle.setText(R.string.connecting);
+            binding.includeInfoPanel.infoTitle.setText(R.string.not_connected);
             // TODO: check error code
             binding.includeInfoPanel.infoMessage.setText(String.format(getString(R.string.connecting_to), hostInfo.getName(), hostInfo.getAddress()));
         } else {
@@ -258,7 +265,7 @@ public class RemoteFragment extends Fragment
         }
     }
 
-    public void playerNoResultsYet() {
+    public void onPlayerNoResultsYet() {
         // Initialize info panel
         switchToPanel(R.id.info_panel);
         HostInfo hostInfo = hostManager.getHostInfo();
@@ -270,19 +277,19 @@ public class RemoteFragment extends Fragment
         binding.includeInfoPanel.infoMessage.setText(null);
     }
 
-    public void systemOnQuit() {
-        playerNoResultsYet();
+    public void onSystemQuit() {
+        onPlayerNoResultsYet();
     }
 
     @Override
-    public void applicationOnVolumeChanged(int volume, boolean muted) {
+    public void onApplicationVolumeChanged(int volume, boolean muted) {
         binding.mediaActionsBar.setVolumeState(volume, muted);
     }
 
 
     // Ignore this
-    public void inputOnInputRequested(String title, String type, String value) {}
-    public void observerOnStopObserving() {}
+    public void onInputRequested(String title, String type, String value) {}
+    public void onObserverStopObserving() {}
 
     /**
      * Sets whats playing information
@@ -293,45 +300,35 @@ public class RemoteFragment extends Fragment
                                    ListType.ItemsAll getItemResult) {
         String title, underTitle, thumbnailUrl;
 
+        switchToPanel(R.id.media_panel);
         switch (getItemResult.type) {
             case ListType.ItemsAll.TYPE_MOVIE:
-                switchToPanel(R.id.media_panel);
-
                 title = getItemResult.title;
                 underTitle = getItemResult.tagline;
                 thumbnailUrl = getItemResult.art.poster;
                 break;
             case ListType.ItemsAll.TYPE_EPISODE:
-                switchToPanel(R.id.media_panel);
-
                 title = getItemResult.title;
                 String season = String.format(getString(R.string.season_episode_abbrev), getItemResult.season, getItemResult.episode);
                 underTitle = String.format("%s | %s", getItemResult.showtitle, season);
                 thumbnailUrl = getItemResult.art.poster;
                 break;
             case ListType.ItemsAll.TYPE_SONG:
-                switchToPanel(R.id.media_panel);
-
                 title = getItemResult.title;
                 underTitle = getItemResult.displayartist + " | " + getItemResult.album;
                 thumbnailUrl = getItemResult.thumbnail;
                 break;
             case ListType.ItemsAll.TYPE_MUSIC_VIDEO:
-                switchToPanel(R.id.media_panel);
-
                 title = getItemResult.title;
                 underTitle = Utils.listStringConcat(getItemResult.artist, ", ") + " | " + getItemResult.album;
                 thumbnailUrl = getItemResult.thumbnail;
                 break;
             case ListType.ItemsAll.TYPE_CHANNEL:
-                switchToPanel(R.id.media_panel);
-
                 title = getItemResult.label;
                 underTitle = getItemResult.title;
                 thumbnailUrl = getItemResult.thumbnail;
                 break;
             default:
-                switchToPanel(R.id.media_panel);
                 title = getItemResult.label;
                 underTitle = "";
                 thumbnailUrl = getItemResult.thumbnail;
@@ -351,11 +348,9 @@ public class RemoteFragment extends Fragment
         binding.mediaActionsBar.setPlaybackState(getActivePlayerResult,
                                                  getPropertiesResult);
 
-        if (binding.poster != null) {
-            UIUtils.loadImageWithCharacterAvatar(getActivity(), hostManager,
-                                                 thumbnailUrl, title,
-                                                 binding.poster, binding.poster.getWidth(), binding.poster.getHeight());
-        }
+        UIUtils.loadImageWithCharacterAvatar(getActivity(), hostManager,
+                                             thumbnailUrl, title,
+                                             binding.poster, binding.poster.getWidth(), binding.poster.getHeight());
 
         // For some smaller screens their height isn't enough to display all controls. Hide the superfluous
         // bottom button bar during playback if that's the case
@@ -375,17 +370,22 @@ public class RemoteFragment extends Fragment
         binding.sectionsButtonBar.setVisibility(View.VISIBLE);
     }
 
+    private int shortAnimationDuration = -1;
+
     /**
      * Switches the info panel shown (they are exclusive)
-     * @param panelResId The panel to show
+     * @param newPanelId The panel to show
      */
-    private void switchToPanel(int panelResId) {
-        if (panelResId == R.id.info_panel) {
-            binding.mediaPanel.setVisibility(View.GONE);
-            binding.includeInfoPanel.infoPanel.setVisibility(View.VISIBLE);
-        } else if (panelResId == R.id.media_panel) {
-            binding.includeInfoPanel.infoPanel.setVisibility(View.GONE);
-            binding.mediaPanel.setVisibility(View.VISIBLE);
+    private void switchToPanel(int newPanelId) {
+        if (shortAnimationDuration == -1)
+            shortAnimationDuration = getResources().getInteger(android.R.integer.config_shortAnimTime);
+
+        if (newPanelId == R.id.info_panel && binding.includeInfoPanel.infoPanel.getVisibility() != View.VISIBLE) {
+            UIUtils.fadeOutView(binding.mediaPanel, shortAnimationDuration, 0);
+            UIUtils.fadeInView(binding.includeInfoPanel.infoPanel, shortAnimationDuration, shortAnimationDuration);
+        } else if (newPanelId == R.id.media_panel && binding.mediaPanel.getVisibility() != View.VISIBLE) {
+            UIUtils.fadeOutView(binding.includeInfoPanel.infoPanel, shortAnimationDuration, 0);
+            UIUtils.fadeInView(binding.mediaPanel, shortAnimationDuration, shortAnimationDuration);
         }
     }
 

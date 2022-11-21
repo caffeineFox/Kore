@@ -31,15 +31,11 @@ import androidx.loader.app.LoaderManager;
 import androidx.loader.content.CursorLoader;
 import androidx.loader.content.Loader;
 
-import com.google.android.material.floatingactionbutton.FloatingActionButton;
-
 import org.xbmc.kore.host.HostManager;
 import org.xbmc.kore.jsonrpc.type.PlaylistType;
 import org.xbmc.kore.provider.MediaContract;
-import org.xbmc.kore.ui.AbstractAdditionalInfoFragment;
+import org.xbmc.kore.ui.AbstractFragment;
 import org.xbmc.kore.ui.AbstractInfoFragment;
-import org.xbmc.kore.ui.generic.RefreshItem;
-import org.xbmc.kore.utils.FileDownloadHelper;
 import org.xbmc.kore.utils.LogUtils;
 import org.xbmc.kore.utils.MediaPlayerUtils;
 import org.xbmc.kore.utils.UIUtils;
@@ -64,7 +60,7 @@ public class AlbumInfoFragment extends AbstractInfoFragment
     }
 
     @Override
-    protected AbstractAdditionalInfoFragment getAdditionalInfoFragment() {
+    protected AbstractFragment getAdditionalInfoFragment() {
         DataHolder dataHolder = getDataHolder();
         albumSongsListFragment = new AlbumSongsListFragment();
         albumSongsListFragment.setAlbum(dataHolder.getId(), dataHolder.getTitle());
@@ -72,15 +68,9 @@ public class AlbumInfoFragment extends AbstractInfoFragment
     }
 
     @Override
-    protected RefreshItem createRefreshItem() {
+    protected String getSyncType() {
         // Don't start refresh on details screen
         return null;
-//        RefreshItem refreshItem = new RefreshItem(requireContext(), LibrarySyncService.SYNC_ALL_MUSIC);
-//        refreshItem.setListener(event -> {
-//            if (event.status == MediaSyncEvent.STATUS_SUCCESS)
-//                LoaderManager.getInstance(this).restartLoader(LOADER_ALBUM, null, AlbumInfoFragment.this);
-//        });
-//        return refreshItem;
     }
 
     @Override
@@ -100,13 +90,12 @@ public class AlbumInfoFragment extends AbstractInfoFragment
     }
 
     @Override
-    protected boolean setupFAB(FloatingActionButton fab) {
-        fab.setOnClickListener(v -> {
+    protected View.OnClickListener getFABClickListener() {
+        return (v -> {
             PlaylistType.Item item = new PlaylistType.Item();
             item.albumid = getDataHolder().getId();
             playItemOnKodi(item);
         });
-        return true;
     }
 
     /*
@@ -157,9 +146,9 @@ public class AlbumInfoFragment extends AbstractInfoFragment
                                            String.valueOf(year)) :
                                           genres);
 
-                    FileDownloadHelper.SongInfo songInfo = new FileDownloadHelper.SongInfo
-                            (dataHolder.getUnderTitle(), dataHolder.getTitle(), 0, 0, null, null);
-                    setDownloadButtonState(songInfo.downloadDirectoryExists());
+                    //FileDownloadHelper.SongInfo songInfo = new FileDownloadHelper.SongInfo
+                    //        (dataHolder.getUnderTitle(), dataHolder.getTitle(), 0, 0, null, null);
+                    //setDownloadButtonState(songInfo.downloadDirectoryExists());
 
                     updateView(dataHolder);
                     break;

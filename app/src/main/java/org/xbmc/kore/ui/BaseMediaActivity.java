@@ -21,21 +21,21 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
-import android.transition.TransitionInflater;
 import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.view.Window;
 import android.widget.ImageView;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.widget.Toolbar;
 import androidx.fragment.app.Fragment;
-import androidx.fragment.app.FragmentTransaction;
+import androidx.fragment.app.FragmentManager;
 import androidx.preference.PreferenceManager;
+import androidx.transition.Transition;
 
-import com.sothree.slidinguppanel.SlidingUpPanelLayout;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.android.material.transition.MaterialElevationScale;
 
 import org.xbmc.kore.R;
 import org.xbmc.kore.Settings;
@@ -49,23 +49,24 @@ import org.xbmc.kore.ui.generic.NavigationDrawerFragment;
 import org.xbmc.kore.ui.generic.VolumeControllerDialogFragmentListener;
 import org.xbmc.kore.ui.sections.remote.RemoteActivity;
 import org.xbmc.kore.utils.LogUtils;
-import org.xbmc.kore.utils.SharedElementTransition;
 import org.xbmc.kore.utils.UIUtils;
 import org.xbmc.kore.utils.Utils;
 
 public abstract class BaseMediaActivity
         extends BaseActivity
         implements HostConnectionObserver.ApplicationEventsObserver,
-                   HostConnectionObserver.PlayerEventsObserver {
+                   HostConnectionObserver.PlayerEventsObserver,
+                   AbstractInfoFragment.fabPlayProvider {
     private static final String TAG = LogUtils.makeLogTag(BaseMediaActivity.class);
 
     private static final String NAVICON_ISARROW = "navstate";
     private static final String ACTIONBAR_TITLE = "actionbartitle";
 
+    public static final String IMAGE_TRANS_NAME = "IMAGE_TRANS_NAME";
+
     ActivityGenericMediaBinding binding;
 
     private NavigationDrawerFragment navigationDrawerFragment;
-    private final SharedElementTransition sharedElementTransition = new SharedElementTransition();
 
     private boolean drawerIndicatorIsArrow;
 
@@ -82,14 +83,12 @@ public abstract class BaseMediaActivity
     private final Runnable hidePanelRunnable = new Runnable() {
         @Override
         public void run() {
-            binding.nowPlayingPanel.setPanelState(SlidingUpPanelLayout.PanelState.HIDDEN);
+            binding.nowPlayingPanel.hidePanel();
         }
     };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        // Request transitions on lollipop
-        getWindow().requestFeature(Window.FEATURE_CONTENT_TRANSITIONS);
         super.onCreate(savedInstanceState);
 
         binding = ActivityGenericMediaBinding.inflate(getLayoutInflater());
@@ -119,22 +118,17 @@ public abstract class BaseMediaActivity
             updateActionBar(actionBarTitle, naviconIsArrow);
         }
 
-        String fragmentTitle = getActionBarTitle();
         Fragment fragment = getSupportFragmentManager().findFragmentById(R.id.fragment_container);
         if (fragment == null) {
             fragment = createFragment();
 
-            fragment.setExitTransition(null);
-            fragment.setReenterTransition(TransitionInflater.from(this)
-                                                            .inflateTransition(android.R.transition.fade));
-
             getSupportFragmentManager()
                     .beginTransaction()
-                    .add(R.id.fragment_container, fragment, fragmentTitle)
+                    .add(R.id.fragment_container, fragment, getActionBarTitle())
+                    .setReorderingAllowed(true)
                     .commit();
         }
 
-        sharedElementTransition.setupExitTransition(this, fragment);
         hostManager = HostManager.getInstance(this);
         hostConnectionObserver = hostManager.getHostConnectionObserver();
     }
@@ -159,22 +153,22 @@ public abstract class BaseMediaActivity
         showNowPlayingPanel = PreferenceManager.getDefaultSharedPreferences(this)
                                                .getBoolean(Settings.KEY_PREF_SHOW_NOW_PLAYING_PANEL,
                                                            Settings.DEFAULT_PREF_SHOW_NOW_PLAYING_PANEL);
-
         if (showNowPlayingPanel) {
             hostConnectionObserver.registerApplicationObserver(this);
             hostConnectionObserver.registerPlayerObserver(this);
             hostConnectionObserver.refreshWhatsPlaying();
-            binding.nowPlayingPanel.completeSetup(this, this.getSupportFragmentManager());
+            binding.nowPlayingPanel.completeSetup(this, this.getSupportFragmentManager(), binding.fragmentContainer);
         } else {
+            binding.nowPlayingPanel.completeSetup(this, this.getSupportFragmentManager(), null);
             //Hide it in case we were displaying the panel and user disabled showing the panel in Settings
-            binding.nowPlayingPanel.setPanelState(SlidingUpPanelLayout.PanelState.HIDDEN);
+            binding.nowPlayingPanel.hidePanel();
         }
-
     }
 
     @Override
     public void onPause() {
         super.onPause();
+        binding.nowPlayingPanel.freeResources();
         if (showNowPlayingPanel) {
             hostConnectionObserver.unregisterApplicationObserver(this);
             hostConnectionObserver.unregisterPlayerObserver(this);
@@ -228,37 +222,101 @@ public abstract class BaseMediaActivity
             Intent launchIntent = new Intent(this, RemoteActivity.class)
                     .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
             startActivity(launchIntent);
+            overridePendingTransition(R.anim.activity_enter, R.anim.activity_exit);
             return true;
         }
         return super.onOptionsItemSelected(item);
     }
 
-    protected void showFragment(AbstractFragment fragment, ImageView sharedImageView, AbstractFragment.DataHolder dataHolder) {
-        FragmentTransaction fragTrans = getSupportFragmentManager().beginTransaction();
+    /**
+     * Replaces the fragment with the given one, showing a Shared Element transition based on the image view specified
+     * The entering fragment must postpone its enter transition and call startPostponedEnterTransition when it's
+     * all setup, so that the shared element transition works
+     * For the reenter transition (pop the back stack) to the current fragment, the current fragment must:
+     * - postpone its enter transition as it is being asked to by the flag shouldPostponeReenterTransition
+     * - launch an Event Bus message ListFragmentSetupComplete when it's fully set up, so that the postponed
+     * transition is allowed to run.
+     * Notice that the fragment postponing and starting the postponed transition might be different than the one
+     * launching the Event Bus message, as is the case if the current fragment is a Tabs Fragment: the Tabs Fragment
+     * postpones the transition, a child of his should launch the Event Bus message, which is caught by the Tabs
+     * Fragment to start the postponed transition
+     * @param fragment Fragment to add
+     * @param args Arguments to the fragment
+     * @param sharedImageView Image view to use in a Shared Element transition
+     */
+    protected void showFragment(Class<? extends Fragment> fragment, Bundle args, ImageView sharedImageView) {
+        args.putString(IMAGE_TRANS_NAME, sharedImageView.getTransitionName());
 
-        // Set up transitions
-        dataHolder.setPosterTransitionName(sharedImageView.getTransitionName());
-        sharedElementTransition.setupEnterTransition(this, fragTrans, fragment, sharedImageView);
+        FragmentManager fragmentManager = getSupportFragmentManager();
+        Fragment currentFragment = fragmentManager.findFragmentById(R.id.fragment_container);
+        if (currentFragment instanceof AbstractFragment) {
+            // Postpone reenter transition to allow for shared element loading
+            ((AbstractFragment) currentFragment).setPostponeReenterTransition(true);
+            Transition exitTransition = new MaterialElevationScale(false),
+                    reenterTransition = new MaterialElevationScale(true);
+            int exitDuration = getResources().getInteger(R.integer.fragment_exit_animation_duration),
+                    reenterDuration = getResources().getInteger(R.integer.fragment_popenter_animation_duration),
+                    reenterStartDelay = getResources().getInteger(R.integer.fragment_popenter_start_offset);
+            exitTransition.setDuration(exitDuration);
+            // Unfortunately we can't do a startDelay on reenter, as the reentering fragment becomes visible
+            // during that delay, which ruins the transition
+            reenterTransition.setDuration(reenterDuration + reenterStartDelay);
+            reenterTransition.setStartDelay(0);
+            currentFragment.setExitTransition(exitTransition);
+            currentFragment.setReenterTransition(reenterTransition);
+        }
+        fragmentManager.beginTransaction()
+                       .setReorderingAllowed(true)
+                       .addSharedElement(sharedImageView, sharedImageView.getTransitionName())
+                       .replace(R.id.fragment_container, fragment, args, getActionBarTitle())
+                       .addToBackStack(null)
+                       .commit();
+        binding.topAppBarLayout.setExpanded(true);
+    }
 
-        fragTrans.replace(R.id.fragment_container, fragment, getActionBarTitle())
-                 .addToBackStack(null)
-                 .commit();
+    /**
+     * Replaces the fragment with the given one, with a generic animation
+     * @param fragment Fragment to add
+     * @param args Arguments to the fragment
+     */
+    protected void showFragment(Class<? extends Fragment> fragment, Bundle args) {
+        args.putString(IMAGE_TRANS_NAME, null);
+        FragmentManager fragmentManager = getSupportFragmentManager();
+        Fragment currentFragment = fragmentManager.findFragmentById(R.id.fragment_container);
+        if (currentFragment instanceof AbstractFragment) {
+            // This is to unset previously set transitions with the overloaded showFragment function.
+            // This can happen in Tabs Fragment, where fragments on one tab want to use transitions (with the
+            // overloaded showFragment), and fragments on another tab want to use the animations provided in here.
+            // If an item on the other tab is clicked and the transitions are set on the Tabs Fragment, then the
+            // animations set here (on the same Tabs Fragment) won't run, unless we unset the transitions
+            currentFragment.setExitTransition(null);
+            currentFragment.setReenterTransition(null);
+            ((AbstractFragment) currentFragment).setPostponeReenterTransition(false);
+        }
+        // Replace fragment
+        fragmentManager
+                .beginTransaction()
+                .setReorderingAllowed(true)
+                .setCustomAnimations(R.anim.fragment_enter, R.anim.fragment_exit, R.anim.fragment_popenter, R.anim.fragment_popexit)
+                .replace(R.id.fragment_container, fragment, args)
+                .addToBackStack(null)
+                .commit();
     }
 
     @Override
-    public void applicationOnVolumeChanged(int volume, boolean muted) {
+    public void onApplicationVolumeChanged(int volume, boolean muted) {
         binding.nowPlayingPanel.setVolumeState(volume, muted);
     }
 
     @Override
-    public void playerOnPropertyChanged(org.xbmc.kore.jsonrpc.notification.Player.NotificationsData notificationsData) {
+    public void onPlayerPropertyChanged(org.xbmc.kore.jsonrpc.notification.Player.NotificationsData notificationsData) {
         binding.nowPlayingPanel.setRepeatShuffleState(notificationsData.property.repeatMode,
                                                       notificationsData.property.shuffled,
                                                       notificationsData.property.partymode);
     }
 
     @Override
-    public void playerOnPlay(PlayerType.GetActivePlayersReturnType getActivePlayerResult,
+    public void onPlayerPlay(PlayerType.GetActivePlayersReturnType getActivePlayerResult,
                              PlayerType.PropertyValue getPropertiesResult,
                              ListType.ItemsAll getItemResult) {
         updateNowPlayingPanel(getActivePlayerResult, getPropertiesResult, getItemResult);
@@ -267,35 +325,37 @@ public abstract class BaseMediaActivity
     }
 
     @Override
-    public void playerOnPause(PlayerType.GetActivePlayersReturnType getActivePlayerResult, PlayerType.PropertyValue getPropertiesResult, ListType.ItemsAll getItemResult) {
+    public void onPlayerPause(PlayerType.GetActivePlayersReturnType getActivePlayerResult, PlayerType.PropertyValue getPropertiesResult, ListType.ItemsAll getItemResult) {
         updateNowPlayingPanel(getActivePlayerResult, getPropertiesResult, getItemResult);
     }
 
     @Override
-    public void playerOnStop() {
+    public void onPlayerStop() {
         // Delay hiding the panel to prevent hiding it when playing the next item in a playlist
         callbackHandler.removeCallbacks(hidePanelRunnable);
         callbackHandler.postDelayed(hidePanelRunnable, 1000);
     }
 
     @Override
-    public void playerOnConnectionError(int errorCode, String description) {}
-
-    @Override
-    public void playerNoResultsYet() {}
-
-    @Override
-    public void observerOnStopObserving() {
-        binding.nowPlayingPanel.setPanelState(SlidingUpPanelLayout.PanelState.HIDDEN);
+    public void onPlayerConnectionError(int errorCode, String description) {
+        binding.nowPlayingPanel.hidePanel();
     }
 
     @Override
-    public void systemOnQuit() {
-        binding.nowPlayingPanel.setPanelState(SlidingUpPanelLayout.PanelState.HIDDEN);
+    public void onPlayerNoResultsYet() {}
+
+    @Override
+    public void onObserverStopObserving() {
+        binding.nowPlayingPanel.hidePanel();
     }
 
     @Override
-    public void inputOnInputRequested(String title, String type, String value) {}
+    public void onSystemQuit() {
+        binding.nowPlayingPanel.hidePanel();
+    }
+
+    @Override
+    public void onInputRequested(String title, String type, String value) {}
 
     private void updateNowPlayingPanel(PlayerType.GetActivePlayersReturnType getActivePlayerResult,
                                        PlayerType.PropertyValue getPropertiesResult,
@@ -306,11 +366,7 @@ public abstract class BaseMediaActivity
 
         callbackHandler.removeCallbacks(hidePanelRunnable);
 
-        // Only set state to collapsed if panel is currently hidden. This prevents collapsing the panel when the user
-        // expanded the panel and started playing the item from a paused state
-        if (binding.nowPlayingPanel.getPanelState() == SlidingUpPanelLayout.PanelState.HIDDEN) {
-            binding.nowPlayingPanel.setPanelState(SlidingUpPanelLayout.PanelState.COLLAPSED);
-        }
+        binding.nowPlayingPanel.showPanel();
 
         binding.nowPlayingPanel.setPlaybackState(getActivePlayerResult, getPropertiesResult);
 
@@ -367,14 +423,21 @@ public abstract class BaseMediaActivity
         int posterWidth = resources.getDimensionPixelOffset(R.dimen.now_playing_panel_art_width);
         int posterHeight = resources.getDimensionPixelOffset(R.dimen.now_playing_panel_art_heigth);
 
-        // If not video, change aspect ration of poster to a square
-        boolean isVideo = (getItemResult.type.equals(ListType.ItemsAll.TYPE_MOVIE)) ||
-                          (getItemResult.type.equals(ListType.ItemsAll.TYPE_EPISODE));
-
-        binding.nowPlayingPanel.setSquarePoster(!isVideo);
-
         UIUtils.loadImageWithCharacterAvatar(this, hostManager, poster, title,
                                              binding.nowPlayingPanel.getPoster(),
-                                             (isVideo) ? posterWidth : posterHeight, posterHeight);
+                                             posterWidth, posterHeight);
+
+//        // If not video, change aspect ration of poster to a square
+//        boolean isVideo = (getItemResult.type.equals(ListType.ItemsAll.TYPE_MOVIE)) ||
+//                          (getItemResult.type.equals(ListType.ItemsAll.TYPE_EPISODE));
+//        binding.nowPlayingPanel.setSquarePoster(!isVideo);
+//        UIUtils.loadImageWithCharacterAvatar(this, hostManager, poster, title,
+//                                             binding.nowPlayingPanel.getPoster(),
+//                                             (isVideo) ? posterWidth : posterHeight, posterHeight);
+    }
+
+    @Override
+    public FloatingActionButton getFABPlay() {
+        return binding.fabPlay;
     }
 }

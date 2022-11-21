@@ -27,7 +27,6 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.PopupMenu;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -37,14 +36,12 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import org.xbmc.kore.R;
 import org.xbmc.kore.host.HostManager;
 import org.xbmc.kore.jsonrpc.ApiCallback;
-import org.xbmc.kore.jsonrpc.ApiException;
 import org.xbmc.kore.jsonrpc.method.PVR;
 import org.xbmc.kore.jsonrpc.method.Player;
 import org.xbmc.kore.jsonrpc.type.ItemType;
 import org.xbmc.kore.jsonrpc.type.PVRType;
 import org.xbmc.kore.ui.AbstractSearchableFragment;
 import org.xbmc.kore.ui.OnBackPressedListener;
-import org.xbmc.kore.ui.viewgroups.RecyclerViewEmptyViewSupport;
 import org.xbmc.kore.utils.LogUtils;
 import org.xbmc.kore.utils.UIUtils;
 
@@ -56,8 +53,10 @@ import java.util.Locale;
 /**
  * Fragment that presents the movie list
  */
-public class PVRChannelsListFragment extends AbstractSearchableFragment
-        implements SwipeRefreshLayout.OnRefreshListener, OnBackPressedListener {
+public class PVRChannelsListFragment
+        extends AbstractSearchableFragment
+        implements SwipeRefreshLayout.OnRefreshListener,
+                   OnBackPressedListener {
     private static final String TAG = LogUtils.makeLogTag(PVRChannelsListFragment.class);
 
     public static final String CHANNELGROUPID = "channelgroupid";
@@ -85,11 +84,20 @@ public class PVRChannelsListFragment extends AbstractSearchableFragment
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        hostManager = HostManager.getInstance(requireContext());
     }
 
     @Override
     protected RecyclerView.Adapter<ChannelBaseViewHolder> createAdapter() {
         return new PVRChannelsListFragment.ChannelAdapter(requireContext());
+    }
+
+    @Override
+    protected String getEmptyResultsTitle() {
+        if (selectedChannelGroupId == -1)
+            return getString(R.string.no_channel_groups_found_refresh);
+        else
+            return getString(R.string.no_channels_found_refresh);
     }
 
     @Override
@@ -101,14 +109,10 @@ public class PVRChannelsListFragment extends AbstractSearchableFragment
             singleChannelGroup = savedInstanceState.getBoolean(SINGLECHANNELGROUP);
         }
 
-        hostManager = HostManager.getInstance(requireContext());
-
         Bundle args = getArguments();
         currentListType = (args == null) ?
                           PVRListFragment.LIST_TV_CHANNELS :
                           args.getInt(PVRListFragment.PVR_LIST_TYPE_KEY, PVRListFragment.LIST_TV_CHANNELS);
-
-        getEmptyView().setOnClickListener(v -> onRefresh());
 
         return root;
     }
@@ -117,17 +121,6 @@ public class PVRChannelsListFragment extends AbstractSearchableFragment
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
         setSupportsSearch(true);
-
-        if (selectedChannelGroupId == -1) {
-
-            ChannelAdapter adapter = (ChannelAdapter) getAdapter();
-
-            if ((adapter == null) ||
-                    (adapter.getGroupItemCount() == 0))
-                browseChannelGroups();
-        } else {
-            browseChannels(selectedChannelGroupId);
-        }
     }
 
     @Override
@@ -147,35 +140,29 @@ public class PVRChannelsListFragment extends AbstractSearchableFragment
     }
 
     @Override
-    public void onResume() {
-        super.onResume();
-    }
-
-    @Override
-    public void onPause() {
-        super.onPause();
-    }
-
-    @Override
     public void onSaveInstanceState(@NonNull Bundle outState) {
         super.onSaveInstanceState(outState);
         outState.putInt(CHANNELGROUPID, selectedChannelGroupId);
         outState.putBoolean(SINGLECHANNELGROUP, singleChannelGroup);
     }
 
+    /** {@inheritDoc} */
     @Override
-    public void onDestroyView() {
-        super.onDestroyView();
+    public void onRefresh () {
+        refreshList();
+    }
+
+    // Got a connection, refresh now
+    @Override
+    public void onConnectionStatusSuccess() {
+        // Only refresh if we're transitioning from an error or initial state
+        boolean refresh = (lastConnectionStatusResult != CONNECTION_SUCCESS);
+        super.onConnectionStatusSuccess();
+        if (refresh) refreshList();
     }
 
     @Override
     protected void refreshList() {
-        onRefresh();
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public void onRefresh () {
         if (hostManager.getHostInfo() != null) {
             if (selectedChannelGroupId == -1) {
                 browseChannelGroups();
@@ -183,9 +170,7 @@ public class PVRChannelsListFragment extends AbstractSearchableFragment
                 browseChannels(selectedChannelGroupId);
             }
         } else {
-            hideRefreshAnimation();
-            Toast.makeText(requireContext(), R.string.no_xbmc_configured, Toast.LENGTH_SHORT)
-                 .show();
+            UIUtils.showSnackbar(getView(), R.string.no_xbmc_configured);
         }
     }
 
@@ -215,7 +200,6 @@ public class PVRChannelsListFragment extends AbstractSearchableFragment
             @Override
             public void onSuccess(List<PVRType.DetailsChannelGroup> result) {
                 if (!isAdded()) return;
-                LogUtils.LOGD(TAG, "Got channel groups");
 
                 if (result.size() == 1) {
                     // Single channel group, go directly to channel list
@@ -223,8 +207,6 @@ public class PVRChannelsListFragment extends AbstractSearchableFragment
                     selectedChannelGroupId = result.get(0).channelgroupid;
                     browseChannels(selectedChannelGroupId);
                 } else {
-                    // To prevent the empty text from appearing on the first load, set it now
-                    getEmptyView().setText(getString(R.string.no_channel_groups_found_refresh));
                     setupChannelGroupsGridview(result);
                     hideRefreshAnimation();
                 }
@@ -234,15 +216,7 @@ public class PVRChannelsListFragment extends AbstractSearchableFragment
             public void onError(int errorCode, String description) {
                 if (!isAdded()) return;
                 LogUtils.LOGD(TAG, "Error getting channel groups: " + description);
-
-                if (errorCode == ApiException.API_ERROR) {
-                    getEmptyView().setText(getString(R.string.might_not_have_pvr));
-                } else {
-                    getEmptyView().setText(String.format(getString(R.string.error_getting_pvr_info), description));
-                }
-                Toast.makeText(requireContext(),
-                               String.format(getString(R.string.error_getting_pvr_info), description),
-                               Toast.LENGTH_SHORT).show();
+                showStatusMessage(null, getString(R.string.might_not_have_pvr));
                 hideRefreshAnimation();
             }
         }, callbackHandler);
@@ -284,50 +258,36 @@ public class PVRChannelsListFragment extends AbstractSearchableFragment
     }
 
     @Override
-    protected RecyclerViewEmptyViewSupport.OnItemClickListener createOnItemClickListener() {
-        return (view, position) -> {
-            Object tag = view.getTag();
+    protected void onListItemClicked(View view, int position) {
+        Object tag = view.getTag();
 
-            if (tag == null)
-            {
-                return;
-            }
+        if (tag == null) return;
 
-            if (tag instanceof ChannelGroupViewHolder) {
-                // Get the id from the tag
-                ChannelGroupViewHolder holder = (ChannelGroupViewHolder) view.getTag();
-                selectedChannelGroupId = holder.channelGroupId;
-                // Notify the activity and show the channels
-                listenerActivity.onChannelGroupSelected(holder.channelGroupId, holder.channelGroupName);
-                browseChannels(holder.channelGroupId);
-            } else {
-                ChannelViewHolder holder = (ChannelViewHolder) tag;
+        if (tag instanceof ChannelGroupViewHolder) {
+            // Get the id from the tag
+            ChannelGroupViewHolder holder = (ChannelGroupViewHolder) view.getTag();
+            selectedChannelGroupId = holder.channelGroupId;
+            // Notify the activity and show the channels
+            listenerActivity.onChannelGroupSelected(holder.channelGroupId, holder.channelGroupName);
+            browseChannels(holder.channelGroupId);
+        } else {
+            ChannelViewHolder holder = (ChannelViewHolder) tag;
 
-                // Start the channel
-                Toast.makeText(requireContext(),
-                        String.format(getString(R.string.channel_switching), holder.channelName),
-                        Toast.LENGTH_SHORT).show();
-                Player.Open action = new Player.Open(Player.Open.TYPE_CHANNEL, holder.channelId);
-                action.execute(hostManager.getConnection(), new ApiCallback<String>() {
-                    @Override
-                    public void onSuccess(String result) {
-                        if (!isAdded()) return;
-                        LogUtils.LOGD(TAG, "Started channel");
-                    }
+            // Start the channel
+            UIUtils.showSnackbar(getView(), String.format(getString(R.string.channel_switching), holder.channelName));
+            Player.Open action = new Player.Open(Player.Open.TYPE_CHANNEL, holder.channelId);
+            action.execute(hostManager.getConnection(), new ApiCallback<String>() {
+                @Override
+                public void onSuccess(String result) { }
 
-                    @Override
-                    public void onError(int errorCode, String description) {
-                        if (!isAdded()) return;
-                        LogUtils.LOGD(TAG, "Error starting channel: " + description);
-
-                        Toast.makeText(requireContext(),
-                                String.format(getString(R.string.error_starting_channel), description),
-                                Toast.LENGTH_SHORT).show();
-
-                    }
-                }, callbackHandler);
-            }
-        };
+                @Override
+                public void onError(int errorCode, String description) {
+                    if (!isResumed()) return;
+                    LogUtils.LOGD(TAG, "Error starting channel: " + description);
+                    UIUtils.showSnackbar(getView(), String.format(getString(R.string.error_starting_channel), description));
+                }
+            }, callbackHandler);
+        }
     }
 
     /**
@@ -353,10 +313,6 @@ public class PVRChannelsListFragment extends AbstractSearchableFragment
             @Override
             public void onSuccess(List<PVRType.DetailsChannel> result) {
                 if (!isAdded()) return;
-                LogUtils.LOGD(TAG, "Got channels");
-
-                // To prevent the empty text from appearing on the first load, set it now
-                getEmptyView().setText(getString(R.string.no_channels_found_refresh));
 
                 List<PVRType.DetailsChannel> finalResult = filter(result);
 
@@ -368,12 +324,7 @@ public class PVRChannelsListFragment extends AbstractSearchableFragment
             public void onError(int errorCode, String description) {
                 if (!isAdded()) return;
                 LogUtils.LOGD(TAG, "Error getting channels: " + description);
-
-                // To prevent the empty text from appearing on the first load, set it now
-                getEmptyView().setText(String.format(getString(R.string.error_getting_pvr_info), description));
-                Toast.makeText(requireContext(),
-                               String.format(getString(R.string.error_getting_pvr_info), description),
-                               Toast.LENGTH_SHORT).show();
+                showStatusMessage(null, getString(R.string.might_not_have_pvr));
                 hideRefreshAnimation();
             }
         }, callbackHandler);
@@ -495,20 +446,13 @@ public class PVRChannelsListFragment extends AbstractSearchableFragment
                         PVR.Record action = new PVR.Record(channelId);
                         action.execute(hostManager.getConnection(), new ApiCallback<String>() {
                             @Override
-                            public void onSuccess(String result) {
-                                if (!isAdded()) return;
-                                LogUtils.LOGD(TAG, "Started recording");
-                            }
+                            public void onSuccess(String result) { }
 
                             @Override
                             public void onError(int errorCode, String description) {
-                                if (!isAdded()) return;
+                                if (!isResumed()) return;
                                 LogUtils.LOGD(TAG, "Error starting to record: " + description);
-
-                                Toast.makeText(requireContext(),
-                                               String.format(getString(R.string.error_starting_to_record), description),
-                                               Toast.LENGTH_SHORT).show();
-
+                                UIUtils.showSnackbar(getView(), String.format(getString(R.string.error_starting_to_record), description));
                             }
                         }, callbackHandler);
                         return true;

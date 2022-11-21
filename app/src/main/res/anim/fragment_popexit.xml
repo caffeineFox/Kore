@@ -14,14 +14,17 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 -->
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:duration="@integer/fragment_popexit_animation_duration"
+    android:shareInterpolator="true"
+    android:interpolator="@anim/kore_accelerate_interpolator">
 
-<TextView xmlns:android="http://schemas.android.com/apk/res/android"
-          android:id="@android:id/empty"
-          android:textAppearance="@style/TextAppearance.Kore.Title"
-          android:layout_height="match_parent"
-          android:layout_width="match_parent"
-          android:layout_gravity="center"
-          android:gravity="center"
-          android:visibility="gone"
-          android:text="@string/loading"/>
+    <alpha
+        android:fromAlpha="1.0"
+        android:toAlpha="0.0" />
 
+    <translate
+        android:fromYDelta="0%"
+        android:toYDelta="15%" />
+
+</set>

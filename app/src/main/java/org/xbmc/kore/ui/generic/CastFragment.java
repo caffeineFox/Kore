@@ -30,23 +30,27 @@ import androidx.loader.app.LoaderManager;
 import androidx.loader.content.CursorLoader;
 import androidx.loader.content.Loader;
 
-import org.xbmc.kore.R;
+import org.xbmc.kore.databinding.FragmentCastBinding;
 import org.xbmc.kore.host.HostManager;
 import org.xbmc.kore.jsonrpc.type.VideoType;
 import org.xbmc.kore.provider.MediaContract;
-import org.xbmc.kore.ui.AbstractAdditionalInfoFragment;
+import org.xbmc.kore.ui.AbstractFragment;
 import org.xbmc.kore.ui.sections.video.AllCastActivity;
 import org.xbmc.kore.utils.LogUtils;
 import org.xbmc.kore.utils.UIUtils;
 
 import java.util.ArrayList;
 
-public class CastFragment extends AbstractAdditionalInfoFragment implements LoaderManager.LoaderCallbacks<Cursor> {
+public class CastFragment
+        extends AbstractFragment
+        implements LoaderManager.LoaderCallbacks<Cursor> {
     private static final String TAG = LogUtils.makeLogTag(CastFragment.class);
 
     private static final String BUNDLE_ITEMID = "itemid";
     private static final String BUNDLE_TITLE = "title";
     private static final String BUNDLE_LOADER_TYPE = "loadertype";
+
+    private FragmentCastBinding binding;
 
     public enum TYPE {
         TVSHOW,
@@ -64,7 +68,8 @@ public class CastFragment extends AbstractAdditionalInfoFragment implements Load
     @Nullable
     @Override
     public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
-        return inflater.inflate(R.layout.fragment_cast, container, false);
+        binding = FragmentCastBinding.inflate(inflater, container, false);
+        return binding.getRoot();
     }
 
     @Override
@@ -73,6 +78,12 @@ public class CastFragment extends AbstractAdditionalInfoFragment implements Load
         Bundle bundle = getArguments();
         if (bundle != null && bundle.containsKey(BUNDLE_LOADER_TYPE))
             LoaderManager.getInstance(this).initLoader(bundle.getInt(BUNDLE_LOADER_TYPE), null, this);
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        binding = null;
     }
 
     @NonNull
@@ -98,6 +109,7 @@ public class CastFragment extends AbstractAdditionalInfoFragment implements Load
     @Override
     public void onLoadFinished(@NonNull Loader<Cursor> loader, Cursor cursor) {
         if (!cursor.moveToFirst()) {
+            binding.castsTitle.setVisibility(View.GONE);
             return;
         }
 
@@ -111,11 +123,9 @@ public class CastFragment extends AbstractAdditionalInfoFragment implements Load
             castArrayList = createTVShowCastList(cursor);
         }
 
-        View rootView = getView();
-        if (rootView == null || rootView.findViewById(R.id.cast_list) == null) return;
-
-        UIUtils.setupCastInfo(getActivity(), castArrayList,
-                              getView().findViewById(R.id.cast_list),
+        UIUtils.setupCastInfo(getActivity(),
+                              castArrayList,
+                              binding.castList,
                               AllCastActivity.buildLaunchIntent(getActivity(),
                                                                 getArguments().getString(BUNDLE_TITLE),
                                                                 castArrayList));
@@ -150,12 +160,10 @@ public class CastFragment extends AbstractAdditionalInfoFragment implements Load
         return castArrayList;
     }
 
-    @Override
     public void refresh() {
         if (getArguments() == null) return;
         LoaderManager.getInstance(this)
-                     .restartLoader(getArguments().getInt(BUNDLE_LOADER_TYPE),
-                                    null, this);
+                     .restartLoader(getArguments().getInt(BUNDLE_LOADER_TYPE), null, this);
     }
 
     /**

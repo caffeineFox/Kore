@@ -33,7 +33,6 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -49,7 +48,7 @@ import org.xbmc.kore.jsonrpc.ApiMethod;
 import org.xbmc.kore.jsonrpc.method.Player;
 import org.xbmc.kore.jsonrpc.type.PlaylistType;
 import org.xbmc.kore.provider.MediaContract;
-import org.xbmc.kore.ui.AbstractAdditionalInfoFragment;
+import org.xbmc.kore.ui.AbstractFragment;
 import org.xbmc.kore.utils.FileDownloadHelper;
 import org.xbmc.kore.utils.LogUtils;
 import org.xbmc.kore.utils.MediaPlayerUtils;
@@ -60,7 +59,8 @@ import java.util.ArrayList;
 /**
  * Fragment that presents the songs list
  */
-public class AlbumSongsListFragment extends AbstractAdditionalInfoFragment
+public class AlbumSongsListFragment
+        extends AbstractFragment
         implements LoaderManager.LoaderCallbacks<Cursor> {
     private static final String TAG = LogUtils.makeLogTag(AlbumSongsListFragment.class);
 
@@ -124,9 +124,8 @@ public class AlbumSongsListFragment extends AbstractAdditionalInfoFragment
 
     @Override
     public void onLoadFinished(@NonNull Loader<Cursor> loader, Cursor data) {
-        if (! data.moveToFirst()) {
-            Toast.makeText(getActivity(), R.string.no_songs_found_refresh,
-                           Toast.LENGTH_SHORT).show();
+        if (!data.moveToFirst()) {
+            UIUtils.showSnackbar(getView(), R.string.no_songs_found_refresh);
             return;
         }
         displaySongs(data);
@@ -223,11 +222,6 @@ public class AlbumSongsListFragment extends AbstractAdditionalInfoFragment
         });
         popupMenu.show();
     };
-
-    @Override
-    public void refresh() {
-        LoaderManager.getInstance(this).restartLoader(LOADER, null, this);
-    }
 
     /**
      * Album songs list query parameters.

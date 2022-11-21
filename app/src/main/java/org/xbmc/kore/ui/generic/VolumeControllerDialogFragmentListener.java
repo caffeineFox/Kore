@@ -129,7 +129,6 @@ public class VolumeControllerDialogFragmentListener extends AppCompatDialogFragm
 
     private void setListeners() {
         binding.vcdVolumeMute.setOnClickListener(onMuteToggleOnClickListener);
-        binding.vcdVolumeMutedIndicator.setOnClickListener(onMuteToggleOnClickListener);
 
         binding.vcdVolumeLevelIndicator.setOnVolumeChangeListener(
                 volume -> {
@@ -141,12 +140,9 @@ public class VolumeControllerDialogFragmentListener extends AppCompatDialogFragm
     }
 
     @Override
-    public void applicationOnVolumeChanged(int volume, boolean muted) {
+    public void onApplicationVolumeChanged(int volume, boolean muted) {
+        if (binding == null) return;
         binding.vcdVolumeLevelIndicator.setVolume(muted, volume);
-
-        binding.vcdVolumeMutedIndicator.setVisibility(muted ? View.VISIBLE : View.GONE);
-        binding.vcdVolumeMutedIndicator.setHighlight(muted);
-
         binding.vcdVolumeMute.setHighlight(muted);
     }
 
@@ -171,10 +167,11 @@ public class VolumeControllerDialogFragmentListener extends AppCompatDialogFragm
     }
 
     public static boolean handleVolumeKeyEvent(Context context, KeyEvent event) {
-        boolean shouldInterceptKey =
-                PreferenceManager.getDefaultSharedPreferences(context)
-                        .getBoolean(Settings.KEY_PREF_USE_HARDWARE_VOLUME_KEYS,
-                                Settings.DEFAULT_PREF_USE_HARDWARE_VOLUME_KEYS);
+        String useHWVolKeysPreferences = PreferenceManager.getDefaultSharedPreferences(context)
+                                                          .getString(Settings.KEY_PREF_USE_HW_VOL_KEYS,
+                                                                     Settings.DEFAULT_PREF_USE_HW_VOL_KEYS);
+        boolean shouldInterceptKey = useHWVolKeysPreferences.equals(Settings.USE_HW_VOL_KEYS_ALWAYS) ||
+                                     useHWVolKeysPreferences.equals(Settings.USE_HW_VOL_KEYS_WHEN_IN_FOREGROUND);
 
         if (shouldInterceptKey) {
             int action = event.getAction();

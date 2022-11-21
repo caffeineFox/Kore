@@ -37,7 +37,6 @@ import android.view.View;
 import android.view.ViewAnimationUtils;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
-import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -48,25 +47,30 @@ import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.preference.PreferenceManager;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+import androidx.transition.Transition;
+import androidx.transition.TransitionInflater;
 
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
+import org.greenrobot.eventbus.Subscribe;
+import org.greenrobot.eventbus.ThreadMode;
 import org.xbmc.kore.R;
 import org.xbmc.kore.Settings;
 import org.xbmc.kore.databinding.FragmentMediaInfoBinding;
+import org.xbmc.kore.host.HostConnectionObserver;
 import org.xbmc.kore.host.HostInfo;
 import org.xbmc.kore.host.HostManager;
 import org.xbmc.kore.jsonrpc.ApiCallback;
+import org.xbmc.kore.jsonrpc.ApiException;
+import org.xbmc.kore.jsonrpc.event.MediaSyncEvent;
 import org.xbmc.kore.jsonrpc.method.Player;
 import org.xbmc.kore.jsonrpc.type.PlaylistType;
 import org.xbmc.kore.service.library.LibrarySyncService;
 import org.xbmc.kore.service.library.SyncItem;
 import org.xbmc.kore.service.library.SyncUtils;
-import org.xbmc.kore.ui.generic.RefreshItem;
 import org.xbmc.kore.ui.sections.remote.RemoteActivity;
 import org.xbmc.kore.utils.LogUtils;
-import org.xbmc.kore.utils.SharedElementTransition;
 import org.xbmc.kore.utils.UIUtils;
 import org.xbmc.kore.utils.Utils;
 
@@ -76,15 +80,19 @@ abstract public class AbstractInfoFragment
         extends AbstractFragment
         implements SwipeRefreshLayout.OnRefreshListener,
                    SyncUtils.OnServiceListener,
-                   SharedElementTransition.SharedElement {
+                   HostConnectionObserver.ConnectionStatusObserver {
     private static final String TAG = LogUtils.makeLogTag(AbstractInfoFragment.class);
 
+    public interface fabPlayProvider {
+        FloatingActionButton getFABPlay();
+    }
+
     private FragmentMediaInfoBinding binding;
+    private FloatingActionButton fabPlay = null;
 
     private HostManager hostManager;
     private HostInfo hostInfo;
     private ServiceConnection serviceConnection;
-    private RefreshItem refreshItem;
     private boolean expandDescription;
     private ViewTreeObserver.OnScrollChangedListener onScrollChangedListener;
 
@@ -103,14 +111,12 @@ abstract public class AbstractInfoFragment
                 if (isGranted) {
                     binding.infoActionDownload.performClick();
                 } else {
-                    Toast.makeText(getActivity(), R.string.write_storage_permission_denied, Toast.LENGTH_SHORT)
-                         .show();
+                    UIUtils.showSnackbar(getView(), R.string.write_storage_permission_denied);
                 }
             });
 
     /**
-     * Use {@link #setDataHolder(DataHolder)}
-     * to provide the required info after creating a new instance of this Fragment
+     * Set args with {@link DataHolder} to provide the required info after creating a new instance of this Fragment
      */
     public AbstractInfoFragment() {
         super();
@@ -121,33 +127,16 @@ abstract public class AbstractInfoFragment
         super.onCreate(savedInstanceState);
         hostManager = HostManager.getInstance(requireContext());
         hostInfo = hostManager.getHostInfo();
+
+        seenButtonLabels = new String[] { getString(R.string.unwatched_status), getString(R.string.watched_status) };
+        pinButtonLabels = new String[] { getString(R.string.unpinned_status), getString(R.string.pinned_status) };
+        enableButtonLabels = new String[] { getString(R.string.disabled_status), getString(R.string.enabled_status) };
     }
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-        if (container == null) {
-            // We're not being shown or there's nothing to show
-            return null;
-        }
         binding = FragmentMediaInfoBinding.inflate(inflater, container, false);
-
-        Resources resources = requireActivity().getResources();
-
-        DataHolder dataHolder = getDataHolder();
-
-        if(!dataHolder.getSquarePoster()) {
-            binding.poster.getLayoutParams().width = resources.getDimensionPixelSize(R.dimen.info_poster_width);
-            binding.poster.getLayoutParams().height = resources.getDimensionPixelSize(R.dimen.info_poster_height);
-        }
-
-        if(getRefreshItem() != null) {
-            binding.swipeRefreshLayout.setOnRefreshListener(this);
-        } else {
-            binding.swipeRefreshLayout.setEnabled(false);
-        }
-
-        binding.poster.setTransitionName(dataHolder.getPosterTransitionName());
 
         if (savedInstanceState == null) {
             FragmentManager fragmentManager = getChildFragmentManager();
@@ -161,18 +150,6 @@ abstract public class AbstractInfoFragment
                 }
             }
         }
-
-        seenButtonLabels = new String[] { getString(R.string.unwatched_status), getString(R.string.watched_status) };
-        pinButtonLabels = new String[] { getString(R.string.unpinned_status), getString(R.string.pinned_status) };
-        enableButtonLabels = new String[] { getString(R.string.disabled_status), getString(R.string.enabled_status) };
-
-        boolean hasButtons = setupInfoActionsBar();
-        binding.infoActionsBar.setVisibility(hasButtons ? View.VISIBLE : View.GONE);
-
-        boolean hasFAB = setupFAB(binding.fabPlay);
-        binding.fabPlay.setVisibility(hasFAB? View.VISIBLE : View.GONE);
-
-        updateView(dataHolder);
         return binding.getRoot();
     }
 
@@ -180,8 +157,43 @@ abstract public class AbstractInfoFragment
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
         setHasOptionsMenu(true);
+
+        Bundle args = getArguments();
+        String transitionName = (args == null) ? null :
+                                args.getString(BaseMediaActivity.IMAGE_TRANS_NAME, null);
+
+        if (transitionName != null) {
+            // If there's a transition name setup up the shared element and fragment transition, and postpone them
+            TransitionInflater transitionInflater = TransitionInflater.from(requireContext());
+
+            // Shared element transition
+            Transition seEnterTransition = transitionInflater.inflateTransition(R.transition.shared_element_image_enter);
+            setSharedElementEnterTransition(seEnterTransition);
+            binding.poster.setTransitionName(transitionName);
+
+            // Fragment enter and return transition
+            Transition enterTransition = transitionInflater.inflateTransition(R.transition.fragment_info_poster_enter),
+                    returnTransition = transitionInflater.inflateTransition(R.transition.fragment_info_poster_enter);
+            int enterDuration = getResources().getInteger(R.integer.fragment_enter_after_exit_animation_duration),
+                    startDelay = getResources().getInteger(R.integer.fragment_enter_after_exit_start_offset),
+                    returnDuration = getResources().getInteger(R.integer.fragment_popexit_animation_duration);
+            enterTransition.setDuration(enterDuration);
+            enterTransition.setStartDelay(startDelay);
+            returnTransition.setDuration(returnDuration);
+            setEnterTransition(enterTransition);
+            setReturnTransition(returnTransition);
+
+            postponeEnterTransition();
+        }
+
+        binding.swipeRefreshLayout.setOnRefreshListener(this);
+        binding.swipeRefreshLayout.setEnabled(getSyncType() != null);
+
+        boolean hasButtons = setupInfoActionsBar();
+        binding.infoActionsBar.setVisibility(hasButtons ? View.VISIBLE : View.GONE);
+
         /* Setup dim the fanart when scroll changes */
-        onScrollChangedListener = UIUtils.createInfoPanelScrollChangedListener(requireContext(), binding.mediaPanel, binding.art, binding.mediaPanelGroup);
+        onScrollChangedListener = UIUtils.createInfoPanelScrollChangedListener(requireContext(), binding.mediaPanel, binding.mediaArt, binding.mediaPanelGroup);
         binding.mediaPanel.getViewTreeObserver().addOnScrollChangedListener(onScrollChangedListener);
     }
 
@@ -195,37 +207,42 @@ abstract public class AbstractInfoFragment
     public void onStart() {
         super.onStart();
         serviceConnection = SyncUtils.connectToLibrarySyncService(getActivity(), this);
+        // Force the exit view to invisible
+        binding.exitTransitionView.setVisibility(View.INVISIBLE);
     }
 
     @Override
     public void onResume() {
-        // Force the exit view to invisible
-        binding.exitTransitionView.setVisibility(View.INVISIBLE);
-        if (refreshItem != null) {
-            refreshItem.register();
-        }
         super.onResume();
+        View.OnClickListener listener = getFABClickListener();
+        if (getActivity() instanceof fabPlayProvider && listener != null) {
+            fabPlay = ((fabPlayProvider) getActivity()).getFABPlay();
+            fabPlay.setOnClickListener(listener);
+        }
+        hostManager.getHostConnectionObserver().registerConnectionStatusObserver(this);
     }
 
     @Override
     public void onPause() {
-        if (refreshItem != null) {
-            refreshItem.unregister();
+        if (fabPlay != null) {
+            fabPlay.setOnClickListener(null);
+            fabPlay.hide();
         }
+        hostManager.getHostConnectionObserver().unregisterConnectionStatusObserver(this);
         super.onPause();
     }
 
     @Override
     public void onStop() {
-        super.onStop();
         SyncUtils.disconnectFromLibrarySyncService(requireContext(), serviceConnection);
+        super.onStop();
     }
 
     @Override
     public void onDestroyView() {
         binding.mediaPanel.getViewTreeObserver().removeOnScrollChangedListener(onScrollChangedListener);
-        super.onDestroyView();
         binding = null;
+        super.onDestroyView();
     }
 
     @Override
@@ -248,38 +265,159 @@ abstract public class AbstractInfoFragment
     /** {@inheritDoc} */
     @Override
     public void onRefresh () {
-        if (getRefreshItem() == null) {
-            Toast.makeText(getActivity(), R.string.Refreshing_not_implemented_for_this_item,
-                           Toast.LENGTH_SHORT).show();
+        if (getSyncType() == null) {
             binding.swipeRefreshLayout.setRefreshing(false);
             return;
         }
-
-        refreshItem.setSwipeRefreshLayout(binding.swipeRefreshLayout);
-        refreshItem.startSync(false);
+        startSync(false);
     }
 
-    @Override
-    public void onServiceConnected(LibrarySyncService librarySyncService) {
-        if (getRefreshItem() == null) {
+    protected void startSync(boolean silentRefresh) {
+        LogUtils.LOGD(TAG, "Starting sync. Silent? " + silentRefresh);
+
+        if (hostInfo == null) {
+            binding.swipeRefreshLayout.setRefreshing(false);
+            UIUtils.showSnackbar(getView(), R.string.no_xbmc_configured);
             return;
         }
 
+        if (!silentRefresh)
+            binding.swipeRefreshLayout.setRefreshing(true);
+        // Start the syncing process
+        Intent syncIntent = new Intent(requireContext(), LibrarySyncService.class);
+        syncIntent.putExtra(getSyncType(), true);
+        Bundle syncExtras = getSyncExtras();
+        if (syncExtras != null) {
+            syncIntent.putExtras(syncExtras);
+        }
+
+        Bundle syncItemParams = new Bundle();
+        syncItemParams.putBoolean(LibrarySyncService.SILENT_SYNC, silentRefresh);
+        syncIntent.putExtra(LibrarySyncService.SYNC_ITEM_PARAMS, syncItemParams);
+
+        requireContext().startService(syncIntent);
+    }
+
+    /**
+     * Should return the {@link LibrarySyncService} SyncType that a refresh initiates.
+     * Setting it to null disables syncing
+     * @return {@link LibrarySyncService} SyncType
+     */
+    protected abstract String getSyncType();
+
+    /**
+     * Should return the extras to pass to syncing process. Specifically, if syncing a sinle item, should return
+     * the {@link LibrarySyncService} syncID and itemId for the item.
+     * @return Extras to pass to {@link LibrarySyncService}
+     */
+    protected Bundle getSyncExtras() {
+        return null;
+    }
+
+    /**
+     * Called when a sync process ends, overwrite to refresh information
+     * @param event MediaSyncEvent that just ended
+     */
+    protected void onSyncProcessEnded(MediaSyncEvent event) { }
+
+    @Override
+    public void onServiceConnected(LibrarySyncService librarySyncService) {
+        if (getSyncType() == null)
+            return;
+
         SyncItem syncItem = SyncUtils.getCurrentSyncItem(librarySyncService,
-            HostManager.getInstance(requireContext()).getHostInfo(),
-            refreshItem.getSyncType());
+                                                         hostManager.getHostInfo(),
+                                                         getSyncType());
         if (syncItem != null) {
-            boolean silentRefresh = (syncItem.getSyncExtras() != null) &&
-                syncItem.getSyncExtras().getBoolean(LibrarySyncService.SILENT_SYNC, false);
+            boolean silentRefresh = syncItem.getSyncParams() != null &&
+                                    syncItem.getSyncParams().getBoolean(LibrarySyncService.SILENT_SYNC, false);
             if (!silentRefresh)
                 binding.swipeRefreshLayout.setRefreshing(true);
-            refreshItem.setSwipeRefreshLayout(binding.swipeRefreshLayout);
-            refreshItem.register();
+        }
+    }
+
+    /**
+     * Event bus post. Called when the syncing process ended
+     * @param event Media Sync Event
+     */
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    public void onEventBusPost(MediaSyncEvent event) {
+        if (!isResumed() || !event.syncType.equals(getSyncType()))
+            return;
+
+        boolean silentSync = false;
+        if (event.syncExtras != null) {
+            silentSync = event.syncExtras.getBoolean(LibrarySyncService.SILENT_SYNC, false);
+        }
+
+        binding.swipeRefreshLayout.setRefreshing(false);
+        onSyncProcessEnded(event);
+
+        if (event.status == MediaSyncEvent.STATUS_SUCCESS) {
+            if (!silentSync) {
+                UIUtils.showSnackbar(getView(), R.string.sync_successful);
+            }
+        } else if (!silentSync) {
+            String msg = (event.errorCode == ApiException.API_ERROR) ?
+                         String.format(getString(R.string.error_while_syncing), event.errorMessage) :
+                         getString(R.string.unable_to_connect_to_xbmc);
+            UIUtils.showSnackbar(getView(), msg);
+        }
+    }
+
+    /**
+     * Hide/Disable UI elements that don't make sense without a connection
+     */
+    @Override
+    public void onConnectionStatusError(int errorCode, String description) {
+        if (fabPlay != null) {
+            fabPlay.setEnabled(false);
+            if (fabPlay.isOrWillBeShown())
+                fabPlay.hide();
+        }
+        binding.swipeRefreshLayout.setEnabled(false);
+        setInfoActionButtonsEnabledState(false);
+    }
+
+    /**
+     * Show/Enable UI elements relevant when there's a connection
+     */
+    @Override
+    public void onConnectionStatusSuccess() {
+        if (fabPlay != null) {
+            fabPlay.setEnabled(true);
+            fabPlay.setTranslationY(0);
+            if (fabPlay.isOrWillBeHidden()) {
+                fabPlay.show();
+            }
+        }
+        binding.swipeRefreshLayout.setEnabled(getSyncType() != null);
+        setInfoActionButtonsEnabledState(true);
+    }
+
+    @Override
+    public void onConnectionStatusNoResultsYet() {
+    }
+
+    private void setInfoActionButtonsEnabledState(boolean enabled) {
+        setButtonEnabledState(binding.infoActionDownload, enabled);
+        setButtonEnabledState(binding.infoActionEnable, enabled);
+        setButtonEnabledState(binding.infoActionPin, enabled);
+        setButtonEnabledState(binding.infoActionStream, enabled);
+        setButtonEnabledState(binding.infoActionQueue, enabled);
+        setButtonEnabledState(binding.infoActionWatched, enabled);
+    }
+
+    private void setButtonEnabledState(MaterialButton button, boolean enabled) {
+        if (button.getVisibility() == View.VISIBLE) {
+            button.setEnabled(enabled);
         }
     }
 
     protected void setFabState(boolean enabled) {
-        binding.fabPlay.setEnabled(enabled);
+        if (fabPlay != null) {
+            fabPlay.setEnabled(enabled);
+        }
     }
 
     protected void streamItemFromKodi(String url, String type) {
@@ -291,7 +429,7 @@ abstract public class AbstractInfoFragment
 
     protected void playItemOnKodi(PlaylistType.Item item) {
         if (item == null) {
-            Toast.makeText(getActivity(), R.string.no_item_available_to_play, Toast.LENGTH_SHORT).show();
+            UIUtils.showSnackbar(getView(), R.string.no_item_available_to_play);
             return;
         }
 
@@ -306,18 +444,11 @@ abstract public class AbstractInfoFragment
 
                     @Override
                     public void onError(int errorCode, String description) {
-                        if (!isAdded()) return;
-                        // Got an error, show toast
-                        Toast.makeText(getActivity(), R.string.unable_to_connect_to_xbmc, Toast.LENGTH_SHORT)
-                             .show();
+                        if (!isResumed()) return;
+                        UIUtils.showSnackbar(getView(), R.string.unable_to_connect_to_xbmc);
                     }
                 },
                 callbackHandler);
-    }
-
-    @Override
-    public boolean isSharedElementVisible() {
-        return UIUtils.isViewInBounds(binding.mediaPanel, binding.poster);
     }
 
     /**
@@ -328,9 +459,9 @@ abstract public class AbstractInfoFragment
                 .getDefaultSharedPreferences(requireContext())
                 .getBoolean(Settings.KEY_PREF_SWITCH_TO_REMOTE_AFTER_MEDIA_START,
                             Settings.DEFAULT_PREF_SWITCH_TO_REMOTE_AFTER_MEDIA_START);
-        if (switchToRemote) {
-            int cx = (binding.fabPlay.getLeft() + binding.fabPlay.getRight()) / 2;
-            int cy = (binding.fabPlay.getTop() + binding.fabPlay.getBottom()) / 2;
+        if (switchToRemote && fabPlay != null) {
+            int cx = (fabPlay.getLeft() + fabPlay.getRight()) / 2;
+            int cy = (fabPlay.getTop() + fabPlay.getBottom()) / 2;
             final Intent launchIntent = new Intent(requireContext(), RemoteActivity.class);
 
             // Show the animation
@@ -343,7 +474,7 @@ abstract public class AbstractInfoFragment
                 public void onAnimationStart(Animator animation) {}
 
                 @Override
-                public void onAnimationEnd(Animator animation) { requireContext().startActivity(launchIntent );}
+                public void onAnimationEnd(Animator animation) { requireContext().startActivity(launchIntent);}
 
                 @Override
                 public void onAnimationCancel(Animator animation) {}
@@ -354,12 +485,6 @@ abstract public class AbstractInfoFragment
             binding.exitTransitionView.setVisibility(View.VISIBLE);
             exitAnim.start();
         }
-    }
-
-    protected void refreshAdditionInfoFragment() {
-        Fragment fragment = getChildFragmentManager().findFragmentById(R.id.media_additional_info);
-        if (fragment != null)
-            ((AbstractAdditionalInfoFragment) fragment).refresh();
     }
 
     protected HostManager getHostManager() {
@@ -385,40 +510,30 @@ abstract public class AbstractInfoFragment
 
         Resources resources = requireActivity().getResources();
 
-        if (!TextUtils.isEmpty(dataHolder.getPosterUrl())) {
-            binding.poster.setVisibility(View.VISIBLE);
-            int posterWidth;
-            int posterHeight;
-            if (dataHolder.getSquarePoster()) {
-                posterWidth = resources.getDimensionPixelOffset(R.dimen.info_poster_width_square);
-                posterHeight = resources.getDimensionPixelOffset(R.dimen.info_poster_height_square);
-            } else {
-                posterWidth = resources.getDimensionPixelOffset(R.dimen.info_poster_width);
-                posterHeight = resources.getDimensionPixelOffset(R.dimen.info_poster_height);
-            }
-
-            UIUtils.loadImageWithCharacterAvatar(getActivity(), hostManager,
-                                                 dataHolder.getPosterUrl(), dataHolder.getTitle(),
-                                                 binding.poster, posterWidth, posterHeight);
+        int posterWidth, posterHeight;
+        if (dataHolder.getSquarePoster()) {
+            posterWidth = resources.getDimensionPixelOffset(R.dimen.info_poster_width_square);
+            posterHeight = resources.getDimensionPixelOffset(R.dimen.info_poster_height_square);
         } else {
-            binding.poster.setVisibility(View.GONE);
-            int padding = requireContext().getResources().getDimensionPixelSize(R.dimen.default_padding);
-            binding.mediaTitle.setPadding(padding, padding, 0, 0);
-            binding.mediaUndertitle.setPadding(padding, padding, 0, 0);
+            posterWidth = resources.getDimensionPixelOffset(R.dimen.info_poster_width);
+            posterHeight = resources.getDimensionPixelOffset(R.dimen.info_poster_height);
         }
+        binding.poster.getLayoutParams().width = posterWidth;
+        binding.poster.getLayoutParams().height = posterHeight;
+        UIUtils.loadImageWithCharacterAvatar(getActivity(), hostManager,
+                                             dataHolder.getPosterUrl(), dataHolder.getTitle(),
+                                             binding.poster, posterWidth, posterHeight);
 
         int artHeight = resources.getDimensionPixelOffset(R.dimen.info_art_height);
-        int artWidth = binding.art.getWidth(); // displayMetrics.widthPixels;
+        int artWidth = binding.mediaArt.getWidth(); // displayMetrics.widthPixels;
 
         UIUtils.loadImageIntoImageview(hostManager,
                                        TextUtils.isEmpty(dataHolder.getFanArtUrl()) ?
                                        dataHolder.getPosterUrl() : dataHolder.getFanArtUrl(),
-                                       binding.art, artWidth, artHeight);
+                                       binding.mediaArt, artWidth, artHeight);
 
         if (!TextUtils.isEmpty(dataHolder.getSearchTerms())) {
-            binding.poster.setOnClickListener(v -> {
-                Utils.launchWebSearchForTerms(requireContext(), dataHolder.getSearchTerms());
-            });
+            binding.poster.setOnClickListener(v -> Utils.launchWebSearchForTerms(requireContext(), dataHolder.getSearchTerms()));
         }
 
         int sectionVisibility;
@@ -433,10 +548,11 @@ abstract public class AbstractInfoFragment
                 binding.showAll.setImageResource(binding.mediaDescription.isExpanded() ? iconCollapseResId : iconExpandResId);
             });
             binding.mediaDescription.setText(dataHolder.getDescription());
-            if (expandDescription) {
-                binding.mediaDescription.expand();
-                binding.showAll.setImageResource(iconExpandResId);
-            }
+            // Expand interferes with transitions, so ignore it
+//            if (expandDescription) {
+//                binding.mediaDescription.expand();
+//                binding.showAll.setImageResource(iconExpandResId);
+//            }
         } else {
             sectionVisibility = View.GONE;
         }
@@ -473,6 +589,8 @@ abstract public class AbstractInfoFragment
             binding.divider1.setVisibility(View.GONE);
             binding.divider2.setVisibility(View.GONE);
         }
+
+        startPostponedEnterTransition();
     }
 
     /**
@@ -486,9 +604,8 @@ abstract public class AbstractInfoFragment
             if (checkStoragePermission()) {
                 if (Settings.allowedDownloadNetworkTypes(getActivity()) != 0) {
                     listener.onClick(view);
-                    setToggleButtonState(binding.infoActionDownload, true);
                 } else {
-                    Toast.makeText(getActivity(), R.string.no_connection_type_selected, Toast.LENGTH_SHORT).show();
+                    UIUtils.showSnackbar(getView(), R.string.no_connection_type_selected);
                 }
             }
         });
@@ -600,27 +717,11 @@ abstract public class AbstractInfoFragment
         return true;
     }
 
-    protected RefreshItem getRefreshItem() {
-        if (refreshItem == null) {
-            refreshItem = createRefreshItem();
-        }
-        return refreshItem;
-    }
-
     protected void setExpandDescription(boolean expandDescription) {
         this.expandDescription = expandDescription;
     }
 
-    abstract protected AbstractAdditionalInfoFragment getAdditionalInfoFragment();
-
-    /**
-     * Called when user commands the information to be renewed. Either through a swipe down
-     * or a menu call.
-     * <br/>
-     * Note, that {@link AbstractAdditionalInfoFragment#refresh()} will be called for an
-     * additional fragment, if available, automatically.
-     */
-    abstract protected RefreshItem createRefreshItem();
+    abstract protected AbstractFragment getAdditionalInfoFragment();
 
     /**
      * Called when the media action bar actions are available and
@@ -635,8 +736,9 @@ abstract public class AbstractInfoFragment
     abstract protected boolean setupInfoActionsBar();
 
     /**
-     * Called when the fab button is available
-     * @return true to enable the Floating Action Button, false otherwise
+     * Called to get the click listener to set on the FAB
+     * Return null to disable the FAB
+     * @return Click listener to set on the FAB, null to disable
      */
-    abstract protected boolean setupFAB(FloatingActionButton fab);
+    abstract protected View.OnClickListener getFABClickListener();
 }

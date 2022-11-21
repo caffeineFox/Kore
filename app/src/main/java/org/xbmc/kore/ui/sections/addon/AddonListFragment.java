@@ -15,13 +15,12 @@
  */
 package org.xbmc.kore.ui.sections.addon;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.res.Resources;
 import android.os.Bundle;
 import android.os.Handler;
-import androidx.preference.PreferenceManager;
-
 import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -31,10 +30,10 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.preference.PreferenceManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import org.xbmc.kore.R;
@@ -43,9 +42,9 @@ import org.xbmc.kore.host.HostManager;
 import org.xbmc.kore.jsonrpc.ApiCallback;
 import org.xbmc.kore.jsonrpc.method.Addons;
 import org.xbmc.kore.jsonrpc.type.AddonType;
+import org.xbmc.kore.ui.AbstractFragment;
 import org.xbmc.kore.ui.AbstractInfoFragment;
 import org.xbmc.kore.ui.AbstractListFragment;
-import org.xbmc.kore.ui.viewgroups.RecyclerViewEmptyViewSupport;
 import org.xbmc.kore.utils.LogUtils;
 import org.xbmc.kore.utils.UIUtils;
 
@@ -62,7 +61,7 @@ public class AddonListFragment extends AbstractListFragment {
     private static final String TAG = LogUtils.makeLogTag(AddonListFragment.class);
 
     public interface OnAddonSelectedListener {
-        void onAddonSelected(ViewHolder vh);
+        void onAddonSelected(AbstractFragment.DataHolder dataHolder, ImageView sharedImageView);
     }
 
     // Activity listener
@@ -76,13 +75,11 @@ public class AddonListFragment extends AbstractListFragment {
     private static boolean hideDisabledAddons;
 
     @Override
-    protected RecyclerViewEmptyViewSupport.OnItemClickListener createOnItemClickListener() {
-        return (view, position) -> {
-            // Get the movie id from the tag
-            ViewHolder tag = (ViewHolder) view.getTag();
-            // Notify the activity
-            listenerActivity.onAddonSelected(tag);
-        };
+    protected void onListItemClicked(View view, int position) {
+        // Get the movie id from the tag
+        ViewHolder tag = (ViewHolder) view.getTag();
+        // Notify the activity
+        listenerActivity.onAddonSelected(tag.dataHolder, tag.artView);
     }
 
     @Override
@@ -91,12 +88,12 @@ public class AddonListFragment extends AbstractListFragment {
     }
 
     @Override
+    protected String getEmptyResultsTitle() { return getString(R.string.no_addons_found_refresh); }
+
+    @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
         setHasOptionsMenu(true);
-
-        if (getAdapter().getItemCount() == 0)
-            callGetAddonsAndSetup();
     }
 
     @Override
@@ -116,13 +113,27 @@ public class AddonListFragment extends AbstractListFragment {
     }
 
     @Override
+    public void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+    }
+
+    /**
+     * Show the addons
+     */
+    @Override
+    public void onConnectionStatusSuccess() {
+        boolean refresh = (lastConnectionStatusResult != CONNECTION_SUCCESS);
+        super.onConnectionStatusSuccess();
+        if (refresh || hasNavigatedToDetail) onRefresh();
+    }
+
+    @Override
     public void onRefresh () {
         if (HostManager.getInstance(requireContext()).getHostInfo() != null) {
-            callGetAddonsAndSetup();
+            getAddonsAndSetup();
         } else {
             hideRefreshAnimation();
-            Toast.makeText(getActivity(), R.string.no_xbmc_configured, Toast.LENGTH_SHORT)
-                 .show();
+            UIUtils.showSnackbar(getView(), R.string.no_xbmc_configured);
         }
     }
 
@@ -151,7 +162,7 @@ public class AddonListFragment extends AbstractListFragment {
                        .putBoolean(Settings.KEY_PREF_ADDONS_FILTER_HIDE_DISABLED, item.isChecked())
                        .apply();
             hideDisabledAddons = item.isChecked();
-            callGetAddonsAndSetup();
+            getAddonsAndSetup();
         }
 
         return super.onOptionsItemSelected(item);
@@ -166,10 +177,8 @@ public class AddonListFragment extends AbstractListFragment {
     /**
      * Get the addons list and setup the gridview
      */
-    private void callGetAddonsAndSetup() {
+    private void getAddonsAndSetup() {
         final AddonsAdapter adapter = (AddonsAdapter) getAdapter();
-
-        binding.swipeRefreshLayout.setRefreshing(true);
 
         // Get the addon list, this is done asyhnchronously
         String[] properties = new String[] {
@@ -182,9 +191,10 @@ public class AddonListFragment extends AbstractListFragment {
         Addons.GetAddons action = new Addons.GetAddons(properties);
         action.execute(HostManager.getInstance(requireContext()).getConnection(),
                        new ApiCallback<List<AddonType.Details>>() {
+                @SuppressLint("NotifyDataSetChanged")
                 @Override
                 public void onSuccess(List<AddonType.Details> result) {
-                    if (!isAdded()) return;
+                    if (!isResumed()) return;
 
                     for (AddonType.Details addon : result) {
                         String regex = "\\[.*?\\]";
@@ -204,20 +214,16 @@ public class AddonListFragment extends AbstractListFragment {
 
                     adapter.notifyDataSetChanged();
                     hideRefreshAnimation();
-
-                    if (adapter.getItemCount() == 0) {
-                        getEmptyView().setText(R.string.no_addons_found_refresh);
-                    }
+                    // Notify parent that list view is setup
+                    notifyListSetupComplete();
                 }
 
                 @Override
                 public void onError(int errorCode, String description) {
                     if (!isAdded()) return;
-
-                    Toast.makeText(getActivity(),
-                        String.format(getString(R.string.error_getting_addon_info), description),
-                        Toast.LENGTH_SHORT).show();
+                    LogUtils.LOGD(TAG, "Error getting addons: " + description);
                     hideRefreshAnimation();
+                    showStatusMessage(null, getString(R.string.error_getting_addon_info, description));
                 }
             },
                        callbackHandler);
@@ -342,7 +348,7 @@ public class AddonListFragment extends AbstractListFragment {
                                                  addonDetails.thumbnail, dataHolder.getTitle(),
                                                  artView, artWidth, artHeight);
 
-            artView.setTransitionName("a"+addonDetails.addonid);
+            artView.setTransitionName("addon" + addonDetails.addonid);
         }
     }
 }

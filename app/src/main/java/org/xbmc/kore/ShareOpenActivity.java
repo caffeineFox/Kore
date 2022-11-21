@@ -13,6 +13,7 @@ import android.widget.Toast;
 import androidx.core.content.pm.ShortcutManagerCompat;
 import androidx.preference.PreferenceManager;
 
+import org.xbmc.kore.host.HostConnection;
 import org.xbmc.kore.host.HostInfo;
 import org.xbmc.kore.host.HostManager;
 import org.xbmc.kore.host.actions.OpenSharedUrl;
@@ -84,9 +85,11 @@ public class ShareOpenActivity extends Activity {
 
         final String action = intent.getAction();
         final String intentType = intent.getType();
-        // Check action: open the Remote activity if no action specified, default open specified (presumably to switch
-        // the host) or any other action other than Send or View, which will be handled later
-        if ((action == null) || action.equals(DEFAULT_OPEN_ACTION) ||
+        // Check action: open the Remote activity if no action specified, no host connection (no hosts configured?),
+        // default open specified (switch host?) or any other action other than Send or View
+        if (action == null ||
+            hostManager.getConnection() == null ||
+            action.equals(DEFAULT_OPEN_ACTION) ||
             !(action.equals(Intent.ACTION_SEND) || action.equals(Intent.ACTION_VIEW))) {
             startActivity(new Intent(this, RemoteActivity.class));
             finish();
@@ -156,7 +159,8 @@ public class ShareOpenActivity extends Activity {
 
         // Don't display Kore after queueing from another app, otherwise start the remote
         if (!queue)
-            startActivity(new Intent(this, RemoteActivity.class));
+            startActivity(new Intent(this, RemoteActivity.class)
+                                  .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP));
         // Always finish as we don't have anything to show
         finish();
     }

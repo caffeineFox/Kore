@@ -43,6 +43,48 @@
         <item>5</item>
     </string-array>
 
+    <!-- Theme colors -->
+    <string-array name="theme_colors_array">
+        <item>@string/theme_color_kore</item>
+        <item>@string/theme_color_green</item>
+        <item>@string/theme_color_yellow</item>
+        <item>@string/theme_color_purple</item>
+        <item>@string/theme_color_system_colors</item>
+    </string-array>
+    <string-array translatable="false" name="theme_colors_values_array">
+        <item>kore</item>
+        <item>green</item>
+        <item>yellow</item>
+        <item>purple</item>
+        <item>system_colors</item>
+    </string-array>
+
+    <!-- For pre Android S (31) remove the System Colors option as its not applicable -->
+    <string-array name="theme_colors_array_pre_S">
+        <item>@string/theme_color_kore</item>
+        <item>@string/theme_color_green</item>
+        <item>@string/theme_color_yellow</item>
+        <item>@string/theme_color_purple</item>
+    </string-array>
+    <string-array translatable="false" name="theme_colors_values_array_pre_S">
+        <item>kore</item>
+        <item>green</item>
+        <item>yellow</item>
+        <item>purple</item>
+    </string-array>
+
+    <!-- Theme variants -->
+    <string-array name="theme_variants_array">
+        <item>@string/theme_variant_auto</item>
+        <item>@string/theme_variant_light</item>
+        <item>@string/theme_variant_dark</item>
+    </string-array>
+    <string-array translatable="false" name="theme_variants_values_array">
+        <item>auto</item>
+        <item>light</item>
+        <item>dark</item>
+    </string-array>
+
     <!-- Remote Bar items -->
     <string-array name="entries_remote_bar_items">
         <item>@string/home</item>
@@ -118,6 +160,18 @@
         <item>2</item>
         <item>3</item>
         <item>5</item>
+    </string-array>
+
+    <!-- Constants for the Use hardware volume keys setting in preferences -->
+    <string-array name="use_hw_vol_keys_array">
+        <item>@string/use_hardware_volume_keys_never</item>
+        <item>@string/use_hardware_volume_keys_always</item>
+        <item>@string/use_hardware_volume_keys_when_in_foreground</item>
+    </string-array>
+    <string-array translatable="false" name="use_hw_vol_keys_array_values_array">
+        <item>never</item>
+        <item>always</item>
+        <item>when_in_foreground</item>
     </string-array>
 
 </resources>

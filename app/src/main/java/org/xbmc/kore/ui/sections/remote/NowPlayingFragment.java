@@ -16,7 +16,6 @@
 package org.xbmc.kore.ui.sections.remote;
 
 import android.annotation.SuppressLint;
-import android.content.Context;
 import android.content.res.Resources;
 import android.os.Bundle;
 import android.text.TextUtils;
@@ -70,27 +69,9 @@ public class NowPlayingFragment extends Fragment
      */
     private HostConnectionObserver hostConnectionObserver;
 
-    /**
-     * Listener for events on this fragment
-     */
-    private NowPlayingListener nowPlayingListener;
-
     private ViewTreeObserver.OnScrollChangedListener onScrollChangedListener;
 
     private FragmentNowPlayingBinding binding;
-
-    private int pixelsToTransparent;
-
-    @Override
-    public void onAttach(@NonNull Context context) {
-        super.onAttach(context);
-        // Try to cast the enclosing activity to the listener interface
-        try {
-            nowPlayingListener = (NowPlayingListener)context;
-        } catch (ClassCastException e) {
-            nowPlayingListener = null;
-        }
-    }
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -113,19 +94,22 @@ public class NowPlayingFragment extends Fragment
         /* Setup dim the fanart when scroll changes */
         onScrollChangedListener = UIUtils.createInfoPanelScrollChangedListener(requireContext(), binding.mediaPanel, binding.art, binding.mediaPanelGroup);
         binding.mediaPanel.getViewTreeObserver().addOnScrollChangedListener(onScrollChangedListener);
+
+        binding.includeInfoPanel.infoPanel.setVisibility(View.VISIBLE);
+        binding.mediaPanel.setVisibility(View.GONE);
     }
 
     @Override
-    public void onResume() {
-        super.onResume();
+    public void onStart() {
+        super.onStart();
         hostConnectionObserver.registerPlayerObserver(this);
     }
 
     @Override
-    public void onPause() {
-        super.onPause();
+    public void onStop() {
         stopNowPlayingInfo();
         hostConnectionObserver.unregisterPlayerObserver(this);
+        super.onStop();
     }
 
     @Override
@@ -136,25 +120,24 @@ public class NowPlayingFragment extends Fragment
     }
 
     @Override
-    public void playerOnPropertyChanged(Player.NotificationsData notificationsData) {
-    }
+    public void onPlayerPropertyChanged(Player.NotificationsData notificationsData) { }
 
     /**
      * HostConnectionObserver.PlayerEventsObserver interface callbacks
      */
-    public void playerOnPlay(PlayerType.GetActivePlayersReturnType getActivePlayerResult,
+    public void onPlayerPlay(PlayerType.GetActivePlayersReturnType getActivePlayerResult,
                              PlayerType.PropertyValue getPropertiesResult,
                              ListType.ItemsAll getItemResult) {
         setNowPlayingInfo(getActivePlayerResult, getPropertiesResult, getItemResult);
     }
 
-    public void playerOnPause(PlayerType.GetActivePlayersReturnType getActivePlayerResult,
+    public void onPlayerPause(PlayerType.GetActivePlayersReturnType getActivePlayerResult,
                               PlayerType.PropertyValue getPropertiesResult,
                               ListType.ItemsAll getItemResult) {
         setNowPlayingInfo(getActivePlayerResult, getPropertiesResult, getItemResult);
     }
 
-    public void playerOnStop() {
+    public void onPlayerStop() {
         stopNowPlayingInfo();
         switchToPanel(R.id.info_panel);
         HostInfo hostInfo = hostManager.getHostInfo();
@@ -162,13 +145,12 @@ public class NowPlayingFragment extends Fragment
         binding.includeInfoPanel.infoMessage.setText(String.format(getString(R.string.connected_to), hostInfo.getName()));
     }
 
-    public void playerOnConnectionError(int errorCode, String description) {
+    public void onPlayerConnectionError(int errorCode, String description) {
         stopNowPlayingInfo();
         switchToPanel(R.id.info_panel);
         HostInfo hostInfo = hostManager.getHostInfo();
         if (hostInfo != null) {
-            binding.includeInfoPanel.infoTitle.setText(R.string.connecting);
-            // TODO: check error code
+            binding.includeInfoPanel.infoTitle.setText(R.string.not_connected);
             binding.includeInfoPanel.infoMessage.setText(String.format(getString(R.string.connecting_to), hostInfo.getName(), hostInfo.getAddress()));
         } else {
             binding.includeInfoPanel.infoTitle.setText(R.string.no_xbmc_configured);
@@ -176,7 +158,7 @@ public class NowPlayingFragment extends Fragment
         }
     }
 
-    public void playerNoResultsYet() {
+    public void onPlayerNoResultsYet() {
         // Initialize info panel
         switchToPanel(R.id.info_panel);
         HostInfo hostInfo = hostManager.getHostInfo();
@@ -188,13 +170,13 @@ public class NowPlayingFragment extends Fragment
         binding.includeInfoPanel.infoMessage.setText(null);
     }
 
-    public void systemOnQuit() {
-        playerNoResultsYet();
+    public void onSystemQuit() {
+        onPlayerNoResultsYet();
     }
 
     // Ignore this
-    public void inputOnInputRequested(String title, String type, String value) {}
-    public void observerOnStopObserving() {}
+    public void onInputRequested(String title, String type, String value) {}
+    public void onObserverStopObserving() {}
 
     /**
      * Sets whats playing information
@@ -208,10 +190,10 @@ public class NowPlayingFragment extends Fragment
         final String title, underTitle, art, poster, genreSeason, year, descriptionPlot, votes;
         double rating;
 
+        switchToPanel(R.id.media_panel);
+
         switch (getItemResult.type) {
             case ListType.ItemsAll.TYPE_MOVIE:
-                switchToPanel(R.id.media_panel);
-
                 title = getItemResult.title;
                 underTitle = getItemResult.tagline;
                 art = getItemResult.art.fanart;
@@ -224,8 +206,6 @@ public class NowPlayingFragment extends Fragment
                 votes = (TextUtils.isEmpty(getItemResult.votes)) ? "" : String.format(getString(R.string.votes), getItemResult.votes);
                 break;
             case ListType.ItemsAll.TYPE_EPISODE:
-                switchToPanel(R.id.media_panel);
-
                 title = getItemResult.title;
                 underTitle = getItemResult.showtitle;
                 art = getItemResult.thumbnail;
@@ -238,8 +218,6 @@ public class NowPlayingFragment extends Fragment
                 votes = (TextUtils.isEmpty(getItemResult.votes)) ? "" : String.format(getString(R.string.votes), getItemResult.votes);
                 break;
             case ListType.ItemsAll.TYPE_SONG:
-                switchToPanel(R.id.media_panel);
-
                 title = getItemResult.title;
                 underTitle = getItemResult.displayartist + " | " + getItemResult.album;
                 art = getItemResult.fanart;
@@ -252,8 +230,6 @@ public class NowPlayingFragment extends Fragment
                 votes = (TextUtils.isEmpty(getItemResult.votes)) ? "" : String.format(getString(R.string.votes), getItemResult.votes);
                 break;
             case ListType.ItemsAll.TYPE_MUSIC_VIDEO:
-                switchToPanel(R.id.media_panel);
-
                 title = getItemResult.title;
                 underTitle = Utils.listStringConcat(getItemResult.artist, ", ")
                              + " | " + getItemResult.album;
@@ -267,8 +243,6 @@ public class NowPlayingFragment extends Fragment
                 votes = null;
                 break;
             case ListType.ItemsAll.TYPE_CHANNEL:
-                switchToPanel(R.id.media_panel);
-
                 title = getItemResult.label;
                 underTitle = getItemResult.title;
                 art = getItemResult.fanart;
@@ -282,8 +256,6 @@ public class NowPlayingFragment extends Fragment
                 break;
             default:
                 // Other type, just present basic info
-                switchToPanel(R.id.media_panel);
-
                 title = getItemResult.label;
                 underTitle = "";
                 art = getItemResult.fanart;
@@ -362,29 +334,12 @@ public class NowPlayingFragment extends Fragment
                                                  poster, title,
                                                  binding.poster, posterWidth, posterHeight);
             UIUtils.loadImageIntoImageview(hostManager, art, binding.art, artWidth, artHeight);
-
-            // Reset padding
-            int paddingLeft = resources.getDimensionPixelOffset(R.dimen.info_poster_width_plus_padding),
-                    paddingRight = binding.mediaTitle.getPaddingRight(),
-                    paddingTop = binding.mediaTitle.getPaddingTop(),
-                    paddingBottom = binding.mediaTitle.getPaddingBottom();
-            binding.mediaTitle.setPadding(paddingLeft, paddingTop, paddingRight, paddingBottom);
-            binding.mediaUndertitle.setPadding(paddingLeft, paddingTop, paddingRight, paddingBottom);
         } else {
             // No fanart, just present the poster
             binding.poster.setVisibility(View.GONE);
             UIUtils.loadImageWithCharacterAvatar(getActivity(), hostManager, poster, title, binding.art, artWidth, artHeight);
-            // Reset padding
-            int paddingLeft = binding.mediaTitle.getPaddingRight(),
-                    paddingRight = binding.mediaTitle.getPaddingRight(),
-                    paddingTop = binding.mediaTitle.getPaddingTop(),
-                    paddingBottom = binding.mediaTitle.getPaddingBottom();
-            binding.mediaTitle.setPadding(paddingLeft, paddingTop, paddingRight, paddingBottom);
-            binding.mediaUndertitle.setPadding(paddingLeft, paddingTop, paddingRight, paddingBottom);
         }
 
-//        if (getItemResult.type.equals(ListType.ItemsAll.TYPE_EPISODE) ||
-//            getItemResult.type.equals(ListType.ItemsAll.TYPE_MOVIE)) {
         if (getPropertiesResult.type.equals(PlayerType.PropertyValue.TYPE_VIDEO)) {
             binding.castList.setVisibility(View.VISIBLE);
             UIUtils.setupCastInfo(getActivity(), getItemResult.cast, binding.castList,
@@ -403,18 +358,23 @@ public class NowPlayingFragment extends Fragment
         binding.progressInfo.stopUpdating();
     }
 
+    private int shortAnimationDuration = -1;
+
     /**
      * Switches the info panel shown (they are exclusive)
      * @param panelResId The panel to show
      */
     private void switchToPanel(int panelResId) {
-        if (panelResId == R.id.info_panel) {
-            binding.mediaPanel.setVisibility(View.GONE);
+        if (shortAnimationDuration == -1)
+            shortAnimationDuration = getResources().getInteger(android.R.integer.config_shortAnimTime);
+
+        if (panelResId == R.id.info_panel && binding.includeInfoPanel.infoPanel.getVisibility() != View.VISIBLE) {
+            UIUtils.fadeOutView(binding.mediaPanel, shortAnimationDuration, 0);
+            UIUtils.fadeInView(binding.includeInfoPanel.infoPanel, shortAnimationDuration, shortAnimationDuration);
             binding.art.setVisibility(View.GONE);
-            binding.includeInfoPanel.infoPanel.setVisibility(View.VISIBLE);
-        } else if (panelResId == R.id.media_panel) {
-            binding.includeInfoPanel.infoPanel.setVisibility(View.GONE);
-            binding.mediaPanel.setVisibility(View.VISIBLE);
+        } else if (panelResId == R.id.media_panel && binding.mediaPanel.getVisibility() != View.VISIBLE) {
+            UIUtils.fadeOutView(binding.includeInfoPanel.infoPanel, shortAnimationDuration, 0);
+            UIUtils.fadeInView(binding.mediaPanel, shortAnimationDuration, shortAnimationDuration);
             binding.art.setVisibility(View.VISIBLE);
         }
     }

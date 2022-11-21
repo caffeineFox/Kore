@@ -28,17 +28,16 @@ import org.xbmc.kore.ui.sections.file.MediaFileListFragment;
 import org.xbmc.kore.utils.LogUtils;
 import org.xbmc.kore.utils.TabsAdapter;
 
-public class AddonDetailsFragment extends AbstractTabsFragment {
-    private static final String TAG = LogUtils.makeLogTag(AddonDetailsFragment.class);
+public class AddonTabsFragment extends AbstractTabsFragment {
+    private static final String TAG = LogUtils.makeLogTag(AddonTabsFragment.class);
 
     public Bundle contentArgs(Bundle details) {
         AbstractInfoFragment.DataHolder dataHolder = new AbstractInfoFragment.DataHolder(details);
         String name = dataHolder.getTitle();
         String path = details.getString(AddonInfoFragment.BUNDLE_KEY_ADDONID);
 
-        MediaFileListFragment.FileLocation rootPath = new MediaFileListFragment.FileLocation(name, "plugin://" + path, true);
-        rootPath.setRootDir(true);
-        details.putParcelable(MediaFileListFragment.ROOT_PATH, rootPath);
+        details.putParcelable(MediaFileListFragment.CURRENT_LOCATION,
+                              new MediaFileListFragment.FileLocation(name, "plugin://" + path, true, null, true));
         details.putBoolean(MediaFileListFragment.DELAY_LOAD, true);
         return details;
     }
@@ -53,7 +52,7 @@ public class AddonDetailsFragment extends AbstractTabsFragment {
     protected TabsAdapter createTabsAdapter(AbstractInfoFragment.DataHolder dataHolder) {
         long baseFragmentId = 1000;
         Bundle args = getArguments();
-        return new TabsAdapter(getActivity(), getChildFragmentManager())
+        return new TabsAdapter(this)
                 .addTab(AddonInfoFragment.class, args, R.string.addon_overview, baseFragmentId++)
                 .addTab(MediaFileListFragment.class, contentArgs(args), R.string.addon_content, baseFragmentId++)
                 ;

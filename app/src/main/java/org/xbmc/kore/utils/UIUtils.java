@@ -15,6 +15,8 @@
  */
 package org.xbmc.kore.utils;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
@@ -44,11 +46,13 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.StringRes;
 import androidx.core.widget.TextViewCompat;
 import androidx.preference.PreferenceManager;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.elevation.SurfaceColors;
+import com.google.android.material.snackbar.Snackbar;
 
 import org.xbmc.kore.R;
 import org.xbmc.kore.Settings;
@@ -329,10 +333,11 @@ public class UIUtils {
      * @param activity Activity
      */
     public static void tintSystemBars(Activity activity) {
-        int color = SurfaceColors.SURFACE_2.getColor(activity);
-        if (Utils.isMOrLater())
-            activity.getWindow().setStatusBarColor(color);
-        color = SurfaceColors.SURFACE_1.getColor(activity);
+        int color;
+//        color = SurfaceColors.SURFACE_2.getColor(activity);
+//        if (Utils.isMOrLater())
+//            activity.getWindow().setStatusBarColor(color);
+        color = SurfaceColors.SURFACE_3.getColor(activity);
         if (Utils.isOreoMR1OrLater())
             activity.getWindow().setNavigationBarColor(color);
     }
@@ -383,29 +388,6 @@ public class UIUtils {
     public static int changeColorAlpha(int color, int alpha)
     {
         return (alpha << 24) | (color & 0x00ffffff);
-    }
-
-    /**
-     * Returns a theme resource Id given the value stored in Shared Preferences
-     * @param prefThemeValue Shared Preferences value for the theme
-     * @return Android resource id of the theme
-     */
-    public static int getThemeResourceId(String prefThemeValue) {
-        switch (Integer.parseInt(prefThemeValue)) {
-            case 1:
-                return R.style.Theme_Kore_Default_Light;
-            case 2:
-                return R.style.Theme_Kore_Default_Dark;
-            case 3:
-                return R.style.Theme_Kore_Sun_Dynamic;
-            case 4:
-                return R.style.Theme_Kore_Sun_Light;
-            case 5:
-                return R.style.Theme_Kore_Sun_Dark;
-            case 0:
-            default:
-                return R.style.Theme_Kore_Default_Dynamic;
-        }
     }
 
     public static void handleVibration(Context context) {
@@ -765,5 +747,51 @@ public class UIUtils {
                 }
             }
         };
+    }
+
+    /**
+     * Show a generic snackbar with a short length
+     * @param view View to find parent of snackbar
+     * @param resId message
+     */
+    public static void showSnackbar(View view, @StringRes int resId) {
+        if (view == null) return;
+        Snackbar.make(view, resId, Snackbar.LENGTH_SHORT)
+                .show();
+    }
+
+    /**
+     * Show a generic snackbar with a short length
+     * @param view View to find parent of snackbar
+     * @param message message
+     */
+    public static void showSnackbar(View view, String message) {
+        if (view == null) return;
+        Snackbar.make(view, message, Snackbar.LENGTH_SHORT)
+                .show();
+    }
+
+    public static void fadeOutView(View view, int duration, int startDelay) {
+        view.animate()
+                    .alpha(0f)
+                    .setStartDelay(startDelay)
+                    .setDuration(duration)
+                    .setListener(new AnimatorListenerAdapter() {
+                        @Override
+                        public void onAnimationEnd(Animator animation) {
+                            super.onAnimationEnd(animation);
+                            view.setVisibility(View.GONE);
+                        }
+                    });
+    }
+
+    public static void fadeInView(View view, int duration, int startDelay) {
+        view.setAlpha(0f);
+        view.setVisibility(View.VISIBLE);
+        view.animate()
+                  .alpha(1f)
+                  .setStartDelay(startDelay)
+                  .setDuration(duration)
+                  .setListener(null);
     }
 }

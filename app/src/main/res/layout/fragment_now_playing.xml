@@ -14,31 +14,29 @@
    limitations under the License.
 -->
 
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
     <include
         android:id="@+id/include_info_panel"
-        layout="@layout/remote_info_panel" />
+        layout="@layout/info_panel" />
 
-    <ImageView
+    <com.google.android.material.imageview.ShapeableImageView
         android:id="@+id/art"
         android:layout_width="match_parent"
         android:layout_height="@dimen/info_art_height"
         android:layout_marginLeft="@dimen/info_panel_horiz_margin"
         android:layout_marginRight="@dimen/info_panel_horiz_margin"
         android:contentDescription="@string/thumbnail"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        android:layout_marginTop="@dimen/remote_viewpager_height"
+        app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.Kore.Image.MediaArt"/>
 
-    <ScrollView
+    <androidx.core.widget.NestedScrollView
         android:id="@+id/media_panel"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent">
+        android:layout_height="match_parent">
 
         <!-- Media playing information -->
         <LinearLayout
@@ -46,6 +44,7 @@
             android:layout_height="wrap_content"
             android:layout_marginLeft="@dimen/info_panel_horiz_margin"
             android:layout_marginRight="@dimen/info_panel_horiz_margin"
+            android:layout_marginTop="@dimen/remote_viewpager_height"
             android:clipChildren="false"
             android:orientation="vertical">
 
@@ -56,15 +55,35 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/info_title_margin_top">
 
+                <androidx.constraintlayout.widget.Guideline
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:id="@+id/poster_bottom_guideline"
+                    android:orientation="horizontal"
+                    app:layout_constraintGuide_begin="@dimen/info_poster_bottom_guideline"/>
+
+                <com.google.android.material.imageview.ShapeableImageView
+                    android:id="@+id/poster"
+                    android:layout_width="@dimen/info_poster_width"
+                    android:layout_height="@dimen/info_poster_height"
+                    android:layout_marginStart="@dimen/small_padding"
+                    android:contentDescription="@string/poster"
+                    android:elevation="@dimen/kore_elevation_level2"
+                    android:scaleType="centerCrop"
+                    app:layout_constraintBottom_toBottomOf="@id/poster_bottom_guideline"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.Kore.Image.Poster" />
+
                 <TextView
                     android:id="@+id/media_title"
                     style="@style/Widget.Kore.TextView.MediaTitle"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:paddingStart="@dimen/info_poster_width_plus_padding"
-                    android:paddingEnd="@dimen/default_padding"
+                    android:layout_marginStart="@dimen/default_padding"
+                    android:layout_marginEnd="@dimen/small_padding"
+                    android:gravity="start"
                     app:layout_constraintTop_toTopOf="parent"
-                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintStart_toEndOf="@id/poster"
                     app:layout_constraintEnd_toEndOf="parent"/>
 
                 <TextView
@@ -72,23 +91,18 @@
                     style="@style/Widget.Kore.TextView.MediaDetails"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:paddingStart="@dimen/info_poster_width_plus_padding"
-                    android:paddingEnd="@dimen/default_padding"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintEnd_toEndOf="parent"
+                    android:paddingTop="0dp"
+                    android:gravity="start"
+                    app:layout_constraintEnd_toEndOf="@id/media_title"
+                    app:layout_constraintStart_toStartOf="@id/media_title"
                     app:layout_constraintTop_toBottomOf="@id/media_title" />
 
-                <com.google.android.material.imageview.ShapeableImageView
-                    android:id="@+id/poster"
-                    android:layout_width="@dimen/info_poster_width"
-                    android:layout_height="@dimen/info_poster_height"
-                    android:layout_marginStart="@dimen/default_padding"
-                    android:contentDescription="@string/poster"
-                    android:elevation="@dimen/kore_elevation_level2"
-                    android:scaleType="centerCrop"
-                    app:layout_constraintBottom_toBottomOf="@id/media_undertitle"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.Kore.Image.Poster" />
+                <androidx.constraintlayout.widget.Barrier
+                    android:id="@+id/barrier_poster"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    app:barrierDirection="bottom"
+                    app:constraint_referenced_ids="poster,media_undertitle" />
 
                 <!-- Progress bar -->
                 <org.xbmc.kore.ui.widgets.MediaProgressIndicator
@@ -100,7 +114,7 @@
                     android:paddingTop="@dimen/small_padding"
                     android:paddingBottom="@dimen/small_padding"
                     android:paddingRight="@dimen/small_padding"
-                    app:layout_constraintTop_toBottomOf="@id/media_undertitle"
+                    app:layout_constraintTop_toBottomOf="@id/barrier_poster"
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintEnd_toEndOf="parent"/>
 
@@ -185,8 +199,8 @@
                 android:useDefaultMargins="true" />
 
         </LinearLayout>
-    </ScrollView>
+    </androidx.core.widget.NestedScrollView>
 
     <!--<include layout="@layout/bottom_media_bar"/>-->
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+</FrameLayout>
