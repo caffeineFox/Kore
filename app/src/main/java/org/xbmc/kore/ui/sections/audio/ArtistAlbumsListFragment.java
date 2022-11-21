@@ -23,9 +23,7 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.GridLayout;
 import android.widget.PopupMenu;
-import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -40,7 +38,7 @@ import org.xbmc.kore.host.HostInfo;
 import org.xbmc.kore.host.HostManager;
 import org.xbmc.kore.jsonrpc.type.PlaylistType;
 import org.xbmc.kore.provider.MediaContract;
-import org.xbmc.kore.ui.AbstractAdditionalInfoFragment;
+import org.xbmc.kore.ui.AbstractFragment;
 import org.xbmc.kore.utils.LogUtils;
 import org.xbmc.kore.utils.MediaPlayerUtils;
 import org.xbmc.kore.utils.UIUtils;
@@ -48,7 +46,8 @@ import org.xbmc.kore.utils.UIUtils;
 /**
  * Fragment that presents a list of albums of an artist
  */
-public class ArtistAlbumsListFragment extends AbstractAdditionalInfoFragment
+public class ArtistAlbumsListFragment
+        extends AbstractFragment
         implements LoaderManager.LoaderCallbacks<Cursor> {
     private static final String TAG = LogUtils.makeLogTag(ArtistAlbumsListFragment.class);
 
@@ -149,7 +148,7 @@ public class ArtistAlbumsListFragment extends AbstractAdditionalInfoFragment
 
         HostManager hostManager = HostManager.getInstance(requireContext());
         View.OnClickListener albumListClickListener = v ->
-                listenerActivity.onAlbumSelected((DataHolder) v.getTag(), v.findViewById(R.id.art));
+                listenerActivity.onAlbumSelected((DataHolder) v.getTag(), null);
 
         Resources resources = requireContext().getResources();
         int artWidth = resources.getDimensionPixelOffset(R.dimen.info_poster_width_square);
@@ -176,7 +175,7 @@ public class ArtistAlbumsListFragment extends AbstractAdditionalInfoFragment
                                                  dataHolder.getPosterUrl(),
                                                  dataHolder.getTitle(),
                                                  itemBinding.art, artWidth, artHeight);
-            itemBinding.art.setTransitionName("al"+dataHolder.getId());
+            itemBinding.art.setTransitionName("artist_album" + dataHolder.getId());
             itemBinding.listContextMenu.setTag(dataHolder);
             itemBinding.listContextMenu.setOnClickListener(albumContextMenuClickListener);
 
@@ -211,9 +210,4 @@ public class ArtistAlbumsListFragment extends AbstractAdditionalInfoFragment
         });
         popupMenu.show();
     };
-
-    @Override
-    public void refresh() {
-        LoaderManager.getInstance(this).restartLoader(LOADER, null, this);
-    }
 }

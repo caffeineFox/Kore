@@ -26,7 +26,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -35,6 +34,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import org.xbmc.kore.R;
+import org.xbmc.kore.host.HostConnectionObserver;
 import org.xbmc.kore.host.HostManager;
 import org.xbmc.kore.jsonrpc.ApiCallback;
 import org.xbmc.kore.jsonrpc.ApiList;
@@ -43,7 +43,6 @@ import org.xbmc.kore.jsonrpc.method.GUI;
 import org.xbmc.kore.jsonrpc.type.FavouriteType;
 import org.xbmc.kore.jsonrpc.type.PlaylistType;
 import org.xbmc.kore.ui.AbstractListFragment;
-import org.xbmc.kore.ui.viewgroups.RecyclerViewEmptyViewSupport;
 import org.xbmc.kore.utils.LogUtils;
 import org.xbmc.kore.utils.MediaPlayerUtils;
 import org.xbmc.kore.utils.UIUtils;
@@ -51,7 +50,10 @@ import org.xbmc.kore.utils.UIUtils;
 import java.util.ArrayList;
 import java.util.List;
 
-public class FavouritesListFragment extends AbstractListFragment implements SwipeRefreshLayout.OnRefreshListener {
+public class FavouritesListFragment
+        extends AbstractListFragment
+        implements SwipeRefreshLayout.OnRefreshListener,
+                   HostConnectionObserver.ConnectionStatusObserver {
     private static final String TAG = "FavouritesListFragment";
 
     private final Handler callbackHandler = new Handler(Looper.getMainLooper());
@@ -59,11 +61,10 @@ public class FavouritesListFragment extends AbstractListFragment implements Swip
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        getFavourites();
     }
 
     @Override
-    protected RecyclerViewEmptyViewSupport.OnItemClickListener createOnItemClickListener() {
+    protected void onListItemClicked(View view, int position) {
         final ApiCallback<String> genericApiCallback = new ApiCallback<String>() {
             @Override
             public void onSuccess(String result) {
@@ -72,38 +73,50 @@ public class FavouritesListFragment extends AbstractListFragment implements Swip
 
             @Override
             public void onError(int errorCode, String description) {
-                Toast.makeText(getActivity(), description, Toast.LENGTH_SHORT).show();
+                if (!isResumed()) return;
+                UIUtils.showSnackbar(getView(), description);
             }
         };
-        return (view, position) -> {
-            final FavouritesAdapter favouritesAdapter = (FavouritesAdapter) getAdapter();
-            final HostManager hostManager = HostManager.getInstance(requireContext());
 
-            final FavouriteType.DetailsFavourite detailsFavourite =
-                    favouritesAdapter.getItem(position);
-            if (detailsFavourite == null) {
-                return;
-            }
-            if (detailsFavourite.type.equals(FavouriteType.FavouriteTypeEnum.WINDOW) &&
-                !TextUtils.isEmpty(detailsFavourite.window)) {
-                GUI.ActivateWindow activateWindow =
-                        new GUI.ActivateWindow(detailsFavourite.window, detailsFavourite.windowParameter);
-                activateWindow.execute(hostManager.getConnection(), genericApiCallback, callbackHandler);
-            } else if (detailsFavourite.type.equals(FavouriteType.FavouriteTypeEnum.MEDIA) &&
-                       !TextUtils.isEmpty(detailsFavourite.path)) {
-                final PlaylistType.Item playlistItem = new PlaylistType.Item();
-                playlistItem.file = detailsFavourite.path;
-                MediaPlayerUtils.play(FavouritesListFragment.this, playlistItem);
-            } else {
-                Toast.makeText(getActivity(), R.string.unable_to_play_favourite_item, Toast.LENGTH_SHORT)
-                     .show();
-            }
-        };
+        final FavouritesAdapter favouritesAdapter = (FavouritesAdapter) getAdapter();
+        final HostManager hostManager = HostManager.getInstance(requireContext());
+
+        final FavouriteType.DetailsFavourite detailsFavourite =
+                favouritesAdapter.getItem(position);
+        if (detailsFavourite == null) {
+            return;
+        }
+        if (detailsFavourite.type.equals(FavouriteType.FavouriteTypeEnum.WINDOW) &&
+            !TextUtils.isEmpty(detailsFavourite.window)) {
+            GUI.ActivateWindow activateWindow =
+                    new GUI.ActivateWindow(detailsFavourite.window, detailsFavourite.windowParameter);
+            activateWindow.execute(hostManager.getConnection(), genericApiCallback, callbackHandler);
+        } else if (detailsFavourite.type.equals(FavouriteType.FavouriteTypeEnum.MEDIA) &&
+                   !TextUtils.isEmpty(detailsFavourite.path)) {
+            final PlaylistType.Item playlistItem = new PlaylistType.Item();
+            playlistItem.file = detailsFavourite.path;
+            MediaPlayerUtils.play(FavouritesListFragment.this, playlistItem);
+        } else {
+            UIUtils.showSnackbar(getView(), R.string.unable_to_play_favourite_item);
+        }
     }
 
     @Override
     protected RecyclerView.Adapter<ViewHolder> createAdapter() {
         return new FavouritesAdapter(requireContext(), HostManager.getInstance(requireContext()));
+    }
+
+    @Override
+    protected String getEmptyResultsTitle() { return getString(R.string.no_favourites_found_refresh); }
+
+    /**
+     * Show the favourites
+     */
+    @Override
+    public void onConnectionStatusSuccess() {
+        boolean refresh = (lastConnectionStatusResult != CONNECTION_SUCCESS);
+        super.onConnectionStatusSuccess();
+        if (refresh) onRefresh();
     }
 
     @Override
@@ -119,10 +132,6 @@ public class FavouritesListFragment extends AbstractListFragment implements Swip
             @Override
             public void onSuccess(ApiList<FavouriteType.DetailsFavourite> result) {
                 if (!isAdded()) return;
-                LogUtils.LOGD(TAG, "Got Favourites");
-
-                // To prevent the empty text from appearing on the first load, set it now
-                getEmptyView().setText(getString(R.string.no_favourites_found_refresh));
                 ((FavouritesAdapter) getAdapter()).setFavouriteItems(result.items);
                 hideRefreshAnimation();
             }
@@ -131,10 +140,7 @@ public class FavouritesListFragment extends AbstractListFragment implements Swip
             public void onError(int errorCode, String description) {
                 if (!isAdded()) return;
                 LogUtils.LOGD(TAG, "Error getting favourites: " + description);
-
-                getEmptyView().setText(getString(R.string.error_favourites, description));
-                Toast.makeText(getActivity(), getString(R.string.error_favourites, description),
-                        Toast.LENGTH_SHORT).show();
+                showStatusMessage(null, getString(R.string.error_favourites, description));
                 hideRefreshAnimation();
             }
         }, callbackHandler);

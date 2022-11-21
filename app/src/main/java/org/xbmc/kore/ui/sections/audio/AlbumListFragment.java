@@ -21,7 +21,6 @@ import android.content.res.Resources;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
-import androidx.preference.PreferenceManager;
 import android.provider.BaseColumns;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
@@ -37,6 +36,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
 import androidx.loader.content.CursorLoader;
+import androidx.preference.PreferenceManager;
 
 import org.xbmc.kore.R;
 import org.xbmc.kore.Settings;
@@ -74,26 +74,6 @@ public class AlbumListFragment extends AbstractCursorListFragment {
 
     @Override
     protected String getListSyncType() { return LibrarySyncService.SYNC_ALL_MUSIC; }
-
-    /**
-     * Use this to display all albums for a specific artist
-     * @param artistId Id
-     */
-    public void setArtist(int artistId) {
-        Bundle args = new Bundle();
-        args.putInt(BUNDLE_KEY_ARTISTID, artistId);
-        setArguments(args);
-    }
-
-    /**
-     * Use this to display all albums for a specific genre
-     * @param genreId genre id
-     */
-    public void setGenre(int genreId) {
-        Bundle args = new Bundle();
-        args.putInt(BUNDLE_KEY_GENREID, genreId);
-        setArguments(args);
-    }
 
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
@@ -163,37 +143,41 @@ public class AlbumListFragment extends AbstractCursorListFragment {
             preferences.edit()
                        .putInt(Settings.KEY_PREF_ALBUMS_SORT_ORDER, Settings.SORT_BY_ALBUM)
                        .apply();
-            refreshList();
+            restartLoader();
         } else if (itemId == R.id.action_sort_by_artist) {
             item.setChecked(!item.isChecked());
             preferences.edit()
                        .putInt(Settings.KEY_PREF_ALBUMS_SORT_ORDER, Settings.SORT_BY_ARTIST)
                        .apply();
-            refreshList();
+            restartLoader();
         } else if (itemId == R.id.action_sort_by_artist_year) {
             item.setChecked(!item.isChecked());
             preferences.edit()
                        .putInt(Settings.KEY_PREF_ALBUMS_SORT_ORDER, Settings.SORT_BY_ARTIST_YEAR)
                        .apply();
-            refreshList();
+            restartLoader();
         } else if (itemId == R.id.action_sort_by_year) {
             item.setChecked(!item.isChecked());
             preferences.edit()
                        .putInt(Settings.KEY_PREF_ALBUMS_SORT_ORDER, Settings.SORT_BY_YEAR)
                        .apply();
-            refreshList();
+            restartLoader();
         }
 
         return super.onOptionsItemSelected(item);
     }
 
     @Override
-    protected void onListItemClicked(View view) {
+    protected void onListItemClicked(View view, int position) {
+        super.onListItemClicked(view, position);
         // Get the movie id from the tag
         ViewHolder tag = (ViewHolder) view.getTag();
         // Notify the activity
         listenerActivity.onAlbumSelected(tag.dataHolder, tag.artView);
     }
+
+    @Override
+    protected String getEmptyResultsTitle() { return getString(R.string.no_albums_found_refresh); }
 
     @Override
     protected RecyclerViewCursorAdapter createCursorAdapter() {
@@ -400,7 +384,7 @@ public class AlbumListFragment extends AbstractCursorListFragment {
                                                  dataHolder.getTitle(),
                                                  artView, artWidth, artHeight);
 
-            artView.setTransitionName("al"+dataHolder.getId());
+            artView.setTransitionName("album" + dataHolder.getId());
         }
     }
 }

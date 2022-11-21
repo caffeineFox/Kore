@@ -25,18 +25,17 @@ import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.viewpager.widget.ViewPager;
+import androidx.fragment.app.Fragment;
+import androidx.viewpager2.widget.ViewPager2;
 
-import org.xbmc.kore.R;
+import com.google.android.material.tabs.TabLayoutMediator;
+
 import org.xbmc.kore.databinding.FragmentDefaultViewPagerBinding;
 import org.xbmc.kore.utils.LogUtils;
-import org.xbmc.kore.utils.SharedElementTransition;
 import org.xbmc.kore.utils.TabsAdapter;
-import org.xbmc.kore.utils.UIUtils;
 
 abstract public class AbstractTabsFragment
-        extends AbstractFragment
-        implements SharedElementTransition.SharedElement {
+        extends AbstractFragment {
     private static final String TAG = LogUtils.makeLogTag(AbstractTabsFragment.class);
     public static final String PREFERENCES_NAME = "AbstractTabsFragmentPreferences";
     private static final String PREFERENCE_PREFIX_LAST_TAB = "lastTab_";
@@ -46,8 +45,7 @@ abstract public class AbstractTabsFragment
     private SharedPreferences preferences;
 
     /**
-     * Use {@link #setDataHolder(AbstractInfoFragment.DataHolder)} to provide the required info
-     * after creating a new instance of this Fragment
+     * Set args with {@link #(AbstractInfoFragment.DataHolder)} to provide the required info
      */
     public AbstractTabsFragment() {
         super();
@@ -55,20 +53,36 @@ abstract public class AbstractTabsFragment
 
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-        if (container == null) {
-            // We're not being shown or there's nothing to show
-            return null;
-        }
-
         preferences = requireContext().getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
-        binding = FragmentDefaultViewPagerBinding.inflate(inflater, container, false);
 
-        binding.pager.setAdapter(createTabsAdapter(getDataHolder()));
+        binding = FragmentDefaultViewPagerBinding.inflate(inflater, container, false);
+        return binding.getRoot();
+    }
+
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+        setHasOptionsMenu(false);
+
+        binding.pager.setOffscreenPageLimit(getOffscreenPageLimit());
+        TabsAdapter tabsAdapter = createTabsAdapter(getDataHolder());
+        binding.pager.setAdapter(tabsAdapter);
+        new TabLayoutMediator(binding.tabLayout, binding.pager,
+                              (tab, position) -> tab.setText(tabsAdapter.getPageTitle(position)))
+                .attach();
 
         if (shouldRememberLastTab()) {
             binding.pager.setCurrentItem(preferences.getInt(PREFERENCE_PREFIX_LAST_TAB + getClass().getName(), 0), false);
         }
-        return binding.getRoot();
+
+        if (shouldPostponeReenterTransition) {
+            // We are in a reenter transition with a shared element transition
+            // Note that the shared element will be made available in a *child* fragment of the ViewPager, but the
+            // postponing is done here, otherwise it doesn't work.
+            // The child fragment needs to send the Event Bus message ListFragmentSetupComplete so that we can
+            // start the postponed transition (done in AbstractFragment)
+            postponeEnterTransition();
+        }
     }
 
     @Override
@@ -76,15 +90,9 @@ abstract public class AbstractTabsFragment
         super.onStop();
         if (shouldRememberLastTab()) {
             preferences.edit()
-                    .putInt(PREFERENCE_PREFIX_LAST_TAB + getClass().getName(), binding.pager.getCurrentItem())
-                    .apply();
+                       .putInt(PREFERENCE_PREFIX_LAST_TAB + getClass().getName(), binding.pager.getCurrentItem())
+                       .apply();
         }
-    }
-
-    @Override
-    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
-        super.onViewCreated(view, savedInstanceState);
-        setHasOptionsMenu(false);
     }
 
     @Override
@@ -93,24 +101,20 @@ abstract public class AbstractTabsFragment
         binding = null;
     }
 
-    @Override
-    public boolean isSharedElementVisible() {
-        View view = getView();
-        if (view == null)
-            return false;
-
-        //Note: this works as R.id.poster is only used in *InfoFragment.
-        //If the same id is used in other fragments in the TabsAdapter we
-        //need to check which fragment is currently displayed
-        View artView = view.findViewById(R.id.poster);
-        View scrollView = view.findViewById(R.id.media_panel);
-        return (artView != null) &&
-               (scrollView != null) &&
-               UIUtils.isViewInBounds(scrollView, artView);
+    protected Fragment getCurrentSelectedFragment() {
+        return getChildFragmentManager().findFragmentByTag("f" + binding.pager.getCurrentItem());
     }
 
-    protected ViewPager getViewPager() {
+    protected ViewPager2 getViewPager() {
         return binding.pager;
+    }
+
+    /**
+     * Override to specify the OffscreenPageLimit to set on the ViewPager2
+     * @return OffscreenPageLimit to set on the ViewPager2
+     */
+    protected int getOffscreenPageLimit() {
+        return 2;
     }
 
     /**

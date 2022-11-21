@@ -30,16 +30,14 @@ import androidx.loader.content.CursorLoader;
 import androidx.loader.content.Loader;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
-import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import org.xbmc.kore.R;
 import org.xbmc.kore.jsonrpc.event.MediaSyncEvent;
 import org.xbmc.kore.jsonrpc.type.PlaylistType;
 import org.xbmc.kore.provider.MediaContract;
 import org.xbmc.kore.service.library.LibrarySyncService;
-import org.xbmc.kore.ui.AbstractAdditionalInfoFragment;
+import org.xbmc.kore.ui.AbstractFragment;
 import org.xbmc.kore.ui.AbstractInfoFragment;
-import org.xbmc.kore.ui.generic.RefreshItem;
 import org.xbmc.kore.utils.FileDownloadHelper;
 import org.xbmc.kore.utils.LogUtils;
 import org.xbmc.kore.utils.MediaPlayerUtils;
@@ -69,16 +67,15 @@ public class MusicVideoInfoFragment extends AbstractInfoFragment
     }
 
     @Override
-    protected RefreshItem createRefreshItem() {
-        RefreshItem refreshItem = new RefreshItem(getActivity(),
-                                                  LibrarySyncService.SYNC_ALL_MUSIC_VIDEOS);
-        refreshItem.setListener(event -> {
-            if (event.status == MediaSyncEvent.STATUS_SUCCESS) {
-                LoaderManager.getInstance(this).restartLoader(LOADER_MUSIC_VIDEO, null, MusicVideoInfoFragment.this);
-            }
-        });
+    protected String getSyncType() {
+        return LibrarySyncService.SYNC_ALL_MUSIC_VIDEOS;
+    }
 
-        return refreshItem;
+    @Override
+    protected void onSyncProcessEnded(MediaSyncEvent event) {
+        if (event.status == MediaSyncEvent.STATUS_SUCCESS) {
+            LoaderManager.getInstance(this).restartLoader(LOADER_MUSIC_VIDEO, null, MusicVideoInfoFragment.this);
+        }
     }
 
     @Override
@@ -95,13 +92,12 @@ public class MusicVideoInfoFragment extends AbstractInfoFragment
     }
 
     @Override
-    protected boolean setupFAB(FloatingActionButton fab) {
-        fab.setOnClickListener(v -> {
+    protected View.OnClickListener getFABClickListener() {
+        return (v -> {
             PlaylistType.Item item = new PlaylistType.Item();
             item.musicvideoid = getDataHolder().getId();
             playItemOnKodi(item);
         });
-        return true;
     }
 
     @Override
@@ -157,9 +153,9 @@ public class MusicVideoInfoFragment extends AbstractInfoFragment
                     dataHolder.setDescription(cursor.getString(MusicVideoDetailsQuery.PLOT));
                     dataHolder.setSearchTerms(artist + " " + title);
 
-                    FileDownloadHelper.MusicVideoInfo musicVideoDownloadInfo = new FileDownloadHelper.MusicVideoInfo(
-                            dataHolder.getTitle(), cursor.getString(MusicVideoDetailsQuery.FILE));
-                    setDownloadButtonState(musicVideoDownloadInfo.downloadFileExists());
+                    //FileDownloadHelper.MusicVideoInfo musicVideoDownloadInfo = new FileDownloadHelper.MusicVideoInfo(
+                    //        dataHolder.getTitle(), cursor.getString(MusicVideoDetailsQuery.FILE));
+                    //setDownloadButtonState(musicVideoDownloadInfo.downloadFileExists());
 
                     updateView(dataHolder);
                     break;
@@ -203,7 +199,7 @@ public class MusicVideoInfoFragment extends AbstractInfoFragment
     }
 
     @Override
-    protected AbstractAdditionalInfoFragment getAdditionalInfoFragment() {
+    protected AbstractFragment getAdditionalInfoFragment() {
         return null;
     }
 

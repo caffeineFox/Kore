@@ -22,24 +22,24 @@ import android.content.ServiceConnection;
 import android.database.Cursor;
 import android.os.Bundle;
 import android.text.TextUtils;
-import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.EditText;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.widget.SearchView;
-import androidx.core.view.MenuItemCompat;
 import androidx.loader.app.LoaderManager;
 import androidx.loader.content.CursorLoader;
 import androidx.loader.content.Loader;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
+import org.greenrobot.eventbus.Subscribe;
+import org.greenrobot.eventbus.ThreadMode;
 import org.xbmc.kore.R;
+import org.xbmc.kore.host.HostConnectionObserver;
 import org.xbmc.kore.host.HostInfo;
 import org.xbmc.kore.host.HostManager;
 import org.xbmc.kore.jsonrpc.ApiException;
@@ -47,80 +47,60 @@ import org.xbmc.kore.jsonrpc.event.MediaSyncEvent;
 import org.xbmc.kore.service.library.LibrarySyncService;
 import org.xbmc.kore.service.library.SyncItem;
 import org.xbmc.kore.service.library.SyncUtils;
-import org.xbmc.kore.ui.viewgroups.RecyclerViewEmptyViewSupport;
 import org.xbmc.kore.utils.LogUtils;
 import org.xbmc.kore.utils.UIUtils;
-
-import de.greenrobot.event.EventBus;
 
 public abstract class AbstractCursorListFragment
 		extends AbstractListFragment
 		implements LoaderManager.LoaderCallbacks<Cursor>,
 				   SyncUtils.OnServiceListener,
-				   SearchView.OnQueryTextListener {
+				   SearchView.OnQueryTextListener,
+				   SwipeRefreshLayout.OnRefreshListener,
+				   HostConnectionObserver.ConnectionStatusObserver {
     private static final String TAG = LogUtils.makeLogTag(AbstractCursorListFragment.class);
 
 	private final String BUNDLE_KEY_SEARCH_QUERY = "search_query";
 
 	private ServiceConnection serviceConnection;
 
-	private EventBus bus;
-
 	// Loader IDs
 	private static final int LOADER = 0;
 
 	// The search filter to use in the loader
 	private String searchFilter = null;
-	private boolean loaderLoading;
 	private String savedSearchFilter;
 	private boolean supportsSearch;
 
 	private SearchView searchView;
-	private boolean isPaused;
 
-	abstract protected void onListItemClicked(View view);
 	abstract protected CursorLoader createCursorLoader();
 	abstract protected RecyclerViewCursorAdapter createCursorAdapter();
 
-	@Nullable
 	@Override
-	public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-		View root = super.onCreateView(inflater, container, savedInstanceState);
-
-		bus = EventBus.getDefault();
+	public void onCreate(@Nullable Bundle savedInstanceState) {
+		super.onCreate(savedInstanceState);
 
 		if (savedInstanceState != null) {
 			savedSearchFilter = savedInstanceState.getString(BUNDLE_KEY_SEARCH_QUERY);
 		}
 		searchFilter = savedSearchFilter;
-
-		return root;
 	}
 
 	@Override
 	public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
 		super.onViewCreated(view, savedInstanceState);
-		LoaderManager.getInstance(this).initLoader(LOADER, null, this);
+		// If we've navigated out of this fragment before, restart the loader as the database might have changed
+		if (hasNavigatedToDetail) {
+			restartLoader();
+		} else {
+			LoaderManager.getInstance(this).initLoader(LOADER, null, this);
+		}
 	}
 
 	@Override
 	public void onStart() {
 		super.onStart();
 		serviceConnection = SyncUtils.connectToLibrarySyncService(getActivity(), this);
-	}
-
-	@Override
-	public void onResume() {
-		bus.register(this);
-		super.onResume();
-		isPaused = false;
-	}
-
-	@Override
-	public void onPause() {
-		bus.unregister(this);
-		super.onPause();
-		isPaused = true;
 	}
 
 	@Override
@@ -139,11 +119,8 @@ public abstract class AbstractCursorListFragment
 	}
 
 	@Override
-	protected RecyclerViewEmptyViewSupport.OnItemClickListener createOnItemClickListener() {
-		return (view, position) -> {
-			saveSearchState();
-			onListItemClicked(view);
-		};
+	protected void onListItemClicked(View view, int position) {
+		saveSearchState();
 	}
 
 	@Override
@@ -172,8 +149,7 @@ public abstract class AbstractCursorListFragment
 	}
 
 	/**
-	 * Should return the {@link LibrarySyncService} SyncType that
-	 * this list initiates
+	 * Should return the {@link LibrarySyncService} SyncType that this list initiates
 	 * @return {@link LibrarySyncService} SyncType
 	 */
 	abstract protected String getListSyncType();
@@ -197,48 +173,41 @@ public abstract class AbstractCursorListFragment
 
 	/**
 	 * Event bus post. Called when the syncing process ended
-	 *
-	 * @param event Refreshes data
-	 */
-	public void onEventMainThread(MediaSyncEvent event) {
-		onSyncProcessEnded(event);
-	}
-
-	/**
-	 * Called each time a MediaSyncEvent is received.
 	 * @param event Media Sync Event
 	 */
-	protected void onSyncProcessEnded(MediaSyncEvent event) {
-        boolean silentSync = false;
-        if (event.syncExtras != null) {
-            silentSync = event.syncExtras.getBoolean(LibrarySyncService.SILENT_SYNC, false);
-        }
+	@Subscribe(threadMode = ThreadMode.MAIN)
+	public void onEventBusPost(MediaSyncEvent event) {
+		if (!isResumed() ||
+			!event.syncType.equals(getListSyncType()))
+			return;
 
-		if (event.syncType.equals(getListSyncType())) {
-			hideRefreshAnimation();
-			if (event.status == MediaSyncEvent.STATUS_SUCCESS) {
-				refreshList();
-                if (!silentSync) {
-                    Toast.makeText(getActivity(), R.string.sync_successful, Toast.LENGTH_SHORT)
-                        .show();
-                }
-            } else if (!silentSync) {
-			    String msg = (event.errorCode == ApiException.API_ERROR) ?
-					String.format(getString(R.string.error_while_syncing), event.errorMessage) :
-					getString(R.string.unable_to_connect_to_xbmc);
-				Toast.makeText(getActivity(), msg, Toast.LENGTH_SHORT).show();
+		boolean silentSync = false;
+		if (event.syncExtras != null) {
+			silentSync = event.syncExtras.getBoolean(LibrarySyncService.SILENT_SYNC, false);
+		}
+
+		hideRefreshAnimation();
+		if (event.status == MediaSyncEvent.STATUS_SUCCESS) {
+			restartLoader();
+			if (!silentSync) {
+				UIUtils.showSnackbar(getView(), R.string.sync_successful);
 			}
+		} else if (!silentSync) {
+			String msg = (event.errorCode == ApiException.API_ERROR) ?
+						 String.format(getString(R.string.error_while_syncing), event.errorMessage) :
+						 getString(R.string.unable_to_connect_to_xbmc);
+			UIUtils.showSnackbar(getView(), msg);
 		}
 	}
 
     @Override
     public void onServiceConnected(LibrarySyncService librarySyncService) {
-        HostInfo hostInfo = HostManager.getInstance(requireContext()).getHostInfo();
-        SyncItem syncItem = SyncUtils.getCurrentSyncItem(librarySyncService, hostInfo, getListSyncType());
-        if (syncItem != null) {
-            boolean silentRefresh = (syncItem.getSyncExtras() != null) &&
-                syncItem.getSyncExtras().getBoolean(LibrarySyncService.SILENT_SYNC, false);
-            if (!silentRefresh)
+		HostInfo hostInfo = HostManager.getInstance(requireContext()).getHostInfo();
+		SyncItem syncItem = SyncUtils.getCurrentSyncItem(librarySyncService, hostInfo, getListSyncType());
+		if (syncItem != null) {
+			boolean silentRefresh = syncItem.getSyncParams() != null &&
+									syncItem.getSyncParams().getBoolean(LibrarySyncService.SILENT_SYNC, false);
+			if (!silentRefresh)
 				binding.swipeRefreshLayout.setRefreshing(true);
         }
     }
@@ -289,11 +258,9 @@ public abstract class AbstractCursorListFragment
 		 * will use the empty search filter. This is due to the fact that we don't restart the
 		 * loader when it is still loading after its been created.
 		 */
-		if (isPaused)
-			return true;
+		if (!isResumed()) return true;
 
 		searchFilter = newText;
-
 		restartLoader();
 
 		return true;
@@ -313,7 +280,6 @@ public abstract class AbstractCursorListFragment
 	@NonNull
 	@Override
 	public Loader<Cursor> onCreateLoader(int i, Bundle bundle) {
-		loaderLoading = true;
 		return createCursorLoader();
 	}
 
@@ -322,10 +288,13 @@ public abstract class AbstractCursorListFragment
 	public void onLoadFinished(@NonNull Loader<Cursor> cursorLoader, Cursor cursor) {
 		((RecyclerViewCursorAdapter) getAdapter()).swapCursor(cursor);
 		if (TextUtils.isEmpty(searchFilter)) {
-			// To prevent the empty text from appearing on the first load, set it now
-			binding.includeEmptyView.empty.setText(getString(R.string.swipe_down_to_refresh));
+			// To prevent the empty text from appearing on the first load, only set it now
+			setupEmptyView(getEmptyResultsTitle(),
+						   (lastConnectionStatusResult == CONNECTION_SUCCESS) ?
+						   getString(R.string.pull_to_refresh) : null);
 		}
-		loaderLoading = false;
+		// Notify parent that list view is setup
+		notifyListSetupComplete();
 	}
 
 	/** {@inheritDoc} */
@@ -349,10 +318,10 @@ public abstract class AbstractCursorListFragment
 	}
 
 	/**
-	 * Use this to reload the items in the list
+	 * Restarts the current loader
 	 */
-	public void refreshList() {
-		restartLoader();
+	public void restartLoader() {
+		LoaderManager.getInstance(this).restartLoader(LOADER, null, this);
 	}
 
 	private void setupSearchMenuItem(Menu menu, MenuInflater inflater) {
@@ -397,11 +366,28 @@ public abstract class AbstractCursorListFragment
 		}
 	}
 
-	private void restartLoader() {
-		//When loader is restarted while current loader hasn't finished yet,
-		//it may result in none of the loaders finishing.
-		if(!loaderLoading) {
-			LoaderManager.getInstance(this).restartLoader(LOADER, null, this);
+	/**
+	 * Override parent methods to only disable Swipe Refresh, as the list can be shown without a connection
+	 */
+	@Override
+	public void onConnectionStatusError(int errorCode, String description) {
+		lastConnectionStatusResult = CONNECTION_ERROR;
+		binding.swipeRefreshLayout.setEnabled(false);
+	}
+
+	@Override
+	public void onConnectionStatusSuccess() {
+		// Only update views if transitioning from error state.
+		// If transitioning from Sucess or No results the enabled UI is already being shown
+		if (lastConnectionStatusResult == CONNECTION_ERROR) {
+			binding.swipeRefreshLayout.setEnabled(true);
 		}
+		lastConnectionStatusResult = CONNECTION_SUCCESS;
+	}
+
+	@Override
+	public void onConnectionStatusNoResultsYet() {
+		// Do nothing, by default the enabled UI is shown while there are no results
+		lastConnectionStatusResult = CONNECTION_NO_RESULT;
 	}
 }

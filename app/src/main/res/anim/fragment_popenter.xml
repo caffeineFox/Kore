@@ -15,11 +15,21 @@
    limitations under the License.
 -->
 <set xmlns:android="http://schemas.android.com/apk/res/android"
-     android:duration="@integer/fragment_animation_duration">
+    android:startOffset="@integer/fragment_popenter_start_offset"
+    android:duration="@integer/fragment_popenter_animation_duration"
+    android:shareInterpolator="true"
+    android:interpolator="@anim/kore_decelerate_interpolator">
 
     <alpha
         android:fromAlpha="0.0"
-        android:toAlpha="1.0"
-        android:interpolator="@anim/fast_decelerate_interpolator"/>
+        android:toAlpha="1.0" />
+
+    <scale
+        android:pivotX="50%"
+        android:pivotY="50%"
+        android:fromXScale="0.92"
+        android:fromYScale="0.92"
+        android:toXScale="1.0"
+        android:toYScale="1.0" />
 
 </set>

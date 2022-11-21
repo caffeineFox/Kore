@@ -31,7 +31,6 @@ import android.widget.BaseAdapter;
 import android.widget.ImageView;
 import android.widget.PopupMenu;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -124,13 +123,20 @@ public class PlaylistFragment extends Fragment
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         binding = FragmentPlaylistBinding.inflate(inflater, container, false);
-        ViewGroup root = binding.getRoot();
+        return binding.getRoot();
+    }
+
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+        // We have options
+        setHasOptionsMenu(true);
 
         playListAdapter = new PlayListAdapter();
         binding.playlist.setAdapter(playListAdapter);
 
         // When clicking on an item, play it
-        binding.playlist.setOnItemClickListener((parent, view, position, id) -> {
+        binding.playlist.setOnItemClickListener((parent, v, position, id) -> {
             PlaylistHolder holder = playlists.get(binding.playlistsBar.getSelectedPlaylistType());
             if (holder != null) {
                 Player.Open action = new Player.Open(Player.Open.TYPE_PLAYLIST, holder.getPlaylistId(), position);
@@ -155,31 +161,20 @@ public class PlaylistFragment extends Fragment
                     playlistHolder.setListViewPosition(binding.playlist.getFirstVisiblePosition(), top);
             }
         });
-
-        return root;
     }
 
     @Override
-    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
-        super.onViewCreated(view, savedInstanceState);
-        // We have options
-        setHasOptionsMenu(true);
-    }
-
-    @Override
-    public void onResume() {
-        super.onResume();
-
+    public void onStart() {
+        super.onStart();
         hostConnectionObserver.registerPlayerObserver(this);
         hostConnectionObserver.registerPlaylistObserver(this);
     }
 
     @Override
-    public void onPause() {
+    public void onStop() {
         hostConnectionObserver.unregisterPlayerObserver(this);
         hostConnectionObserver.unregisterPlaylistObserver(this);
-
-        super.onPause();
+        super.onStop();
     }
 
     @Override
@@ -200,7 +195,7 @@ public class PlaylistFragment extends Fragment
         if (itemId == R.id.action_clear_playlist) {
             PlaylistHolder playlistHolder = playlists.get(binding.playlistsBar.getSelectedPlaylistType());
             if (playlistHolder != null) {
-                playlistOnClear(playlistHolder.getPlaylistId());
+                onPlaylistClear(playlistHolder.getPlaylistId());
                 Playlist.Clear action = new Playlist.Clear(playlistHolder.getPlaylistId());
                 action.execute(hostManager.getConnection(), defaultStringActionCallback, callbackHandler);
             }
@@ -232,7 +227,7 @@ public class PlaylistFragment extends Fragment
                     public void onError(int errorCode, String description) {
                         refreshingPlaylist = false;
 
-                        playerOnConnectionError(errorCode, description);
+                        onPlayerConnectionError(errorCode, description);
                     }
                 }, callbackHandler);
     }
@@ -243,7 +238,7 @@ public class PlaylistFragment extends Fragment
     private final ApiCallback<String> defaultStringActionCallback = ApiMethod.getDefaultActionCallback();
 
     @Override
-    public void playerOnPropertyChanged(org.xbmc.kore.jsonrpc.notification.Player.NotificationsData notificationsData) {
+    public void onPlayerPropertyChanged(org.xbmc.kore.jsonrpc.notification.Player.NotificationsData notificationsData) {
         if (notificationsData.property.shuffled != null)
             refreshPlaylist(new GetPlaylist(lastGetActivePlayerResult.type));
     }
@@ -252,7 +247,7 @@ public class PlaylistFragment extends Fragment
      * HostConnectionObserver.PlayerEventsObserver interface callbacks
      */
     @Override
-    public void playerOnPlay(PlayerType.GetActivePlayersReturnType getActivePlayerResult,
+    public void onPlayerPlay(PlayerType.GetActivePlayersReturnType getActivePlayerResult,
                              PlayerType.PropertyValue getPropertiesResult,
                              ListType.ItemsAll getItemResult) {
         playerState = PLAYER_STATE.PLAYING;
@@ -277,7 +272,7 @@ public class PlaylistFragment extends Fragment
     }
 
     @Override
-    public void playerOnPause(PlayerType.GetActivePlayersReturnType getActivePlayerResult,
+    public void onPlayerPause(PlayerType.GetActivePlayersReturnType getActivePlayerResult,
                               PlayerType.PropertyValue getPropertiesResult,
                               ListType.ItemsAll getItemResult) {
         playerState = PLAYER_STATE.PAUSED;
@@ -293,7 +288,7 @@ public class PlaylistFragment extends Fragment
     }
 
     @Override
-    public void playerOnStop() {
+    public void onPlayerStop() {
         playerState = PLAYER_STATE.STOPPED;
 
         if (lastGetActivePlayerResult != null)
@@ -305,14 +300,14 @@ public class PlaylistFragment extends Fragment
     }
 
     @Override
-    public void playerOnConnectionError(int errorCode, String description) {
+    public void onPlayerConnectionError(int errorCode, String description) {
         playerState = PLAYER_STATE.CONNECTION_ERROR;
 
         HostInfo hostInfo = hostManager.getHostInfo();
 
         switchToPanel(R.id.info_panel);
         if (hostInfo != null) {
-            binding.includeInfoPanel.infoTitle.setText(R.string.connecting);
+            binding.includeInfoPanel.infoTitle.setText(R.string.not_connected);
             binding.includeInfoPanel.infoMessage.setText(String.format(getString(R.string.connecting_to), hostInfo.getName(), hostInfo.getAddress()));
         } else {
             binding.includeInfoPanel.infoTitle.setText(R.string.no_xbmc_configured);
@@ -321,7 +316,7 @@ public class PlaylistFragment extends Fragment
     }
 
     @Override
-    public void playerNoResultsYet() {
+    public void onPlayerNoResultsYet() {
         playerState = PLAYER_STATE.NO_RESULTS_YET;
 
         // Initialize info panel
@@ -336,18 +331,19 @@ public class PlaylistFragment extends Fragment
     }
 
     @Override
-    public void systemOnQuit() {
-        playerNoResultsYet();
+    public void onSystemQuit() {
+        onPlayerNoResultsYet();
     }
 
     // Ignore this
     @Override
-    public void inputOnInputRequested(String title, String type, String value) {}
-    @Override
-    public void observerOnStopObserving() {}
+    public void onInputRequested(String title, String type, String value) {}
 
     @Override
-    public void playlistOnClear(int playlistId) {
+    public void onObserverStopObserving() {}
+
+    @Override
+    public void onPlaylistClear(int playlistId) {
         Iterator<String> it = playlists.keySet().iterator();
         while (it.hasNext()) {
             String key = it.next();
@@ -362,12 +358,12 @@ public class PlaylistFragment extends Fragment
     }
 
     @Override
-    public void playlistsAvailable(ArrayList<GetPlaylist.GetPlaylistResult> playlists) {
+    public void onPlaylistsAvailable(ArrayList<GetPlaylist.GetPlaylistResult> playlists) {
         updatePlaylists(playlists);
 
         if ((playerState == PLAYER_STATE.PLAYING) &&
             (hostManager.getConnection().getProtocol() == HostConnection.PROTOCOL_TCP))
-            // if item is currently playing displaying is already handled by playerOnPlay callback
+            // if item is currently playing displaying is already handled by onPlayerPlay callback
             return;
 
         // BUG: When playing movies playlist stops, audio tab gets selected when it contains a playlist.
@@ -380,8 +376,8 @@ public class PlaylistFragment extends Fragment
     }
 
     @Override
-    public void playlistOnError(int errorCode, String description) {
-        playerOnConnectionError(errorCode, description);
+    public void onPlaylistError(int errorCode, String description) {
+        onPlayerConnectionError(errorCode, description);
     }
 
     private void updatePlaylists(ArrayList<GetPlaylist.GetPlaylistResult> playlists) {
@@ -589,8 +585,7 @@ public class PlaylistFragment extends Fragment
 
             if (lastGetItemResult != null &&
                 playlistItems.get(finalPosition).id == lastGetItemResult.id) {
-                Toast.makeText(getActivity(), R.string.cannot_move_playing_item, Toast.LENGTH_SHORT)
-                     .show();
+                UIUtils.showSnackbar(PlaylistFragment.this.getView(), R.string.cannot_move_playing_item);
                 rollbackSwappedItems(originalPosition, finalPosition);
                 notifyDataSetChanged();
                 return;
@@ -611,25 +606,23 @@ public class PlaylistFragment extends Fragment
 
                         @Override
                         public void onError(int errorCode, String description) {
+                            if (!isResumed()) return;
                             //Remove succeeded but insert failed, so we need to remove item from playlist at final position
                             playlistItems.remove(finalPosition);
                             notifyDataSetChanged();
-                            if (!isAdded()) return;
-                            // Got an error, show toast
-                            Toast.makeText(getActivity(), R.string.unable_to_move_item, Toast.LENGTH_SHORT)
-                                 .show();
+                            // Got an error, show message
+                            UIUtils.showSnackbar(PlaylistFragment.this.getView(), R.string.unable_to_move_item);
                         }
                     }, callbackHandler);
                 }
 
                 @Override
                 public void onError(int errorCode, String description) {
+                    if (!isResumed()) return;
                     rollbackSwappedItems(originalPosition, finalPosition);
                     notifyDataSetChanged();
-                    if (!isAdded()) return;
-                    // Got an error, show toast
-                    Toast.makeText(getActivity(), R.string.unable_to_move_item, Toast.LENGTH_SHORT)
-                         .show();
+                    // Got an error, show message
+                    UIUtils.showSnackbar(PlaylistFragment.this.getView(), R.string.unable_to_move_item);
                 }
             }, callbackHandler);
         }

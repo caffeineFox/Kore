@@ -62,7 +62,7 @@ public class AddonListContainerFragment extends AbstractTabsFragment {
 
         int hostId = HostManager.getInstance(requireContext()).getHostInfo().getId();
 
-        TabsAdapter tabsAdapter = new TabsAdapter(getActivity(), getChildFragmentManager());
+        TabsAdapter tabsAdapter = new TabsAdapter(this);
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(requireContext());
         Set<String> bookmarked = prefs.getStringSet(Settings.getBookmarkedAddonsPrefKey(hostId), Collections.emptySet());
         long baseFragmentId = 70 + bookmarked.size() * 100L;
@@ -70,8 +70,9 @@ public class AddonListContainerFragment extends AbstractTabsFragment {
         for (String path: bookmarked) {
             Bundle args = (Bundle) arguments.clone();
             String name = prefs.getString(Settings.getNameBookmarkedAddonsPrefKey(hostId) + path, Settings.DEFAULT_PREF_NAME_BOOKMARKED_ADDON);
-            args.putParcelable(MediaFileListFragment.ROOT_PATH,
-                                    new MediaFileListFragment.FileLocation(name, "plugin://" + path, true));
+            args.putParcelable(MediaFileListFragment.CURRENT_LOCATION,
+                               new MediaFileListFragment.FileLocation(name, "plugin://" + path, true, null, true));
+            args.putBoolean(MediaFileListFragment.DELAY_LOAD, true);
             args.putString(MediaFileListFragment.MEDIA_TYPE, Files.Media.FILES);
             tabsAdapter.addTab(MediaFileListFragment.class, args, name, ++baseFragmentId);
         }

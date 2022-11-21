@@ -31,7 +31,6 @@ import androidx.loader.content.CursorLoader;
 import androidx.loader.content.Loader;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
-import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import org.xbmc.kore.R;
 import org.xbmc.kore.Settings;
@@ -41,10 +40,9 @@ import org.xbmc.kore.jsonrpc.method.VideoLibrary;
 import org.xbmc.kore.jsonrpc.type.PlaylistType;
 import org.xbmc.kore.provider.MediaContract;
 import org.xbmc.kore.service.library.LibrarySyncService;
-import org.xbmc.kore.ui.AbstractAdditionalInfoFragment;
+import org.xbmc.kore.ui.AbstractFragment;
 import org.xbmc.kore.ui.AbstractInfoFragment;
 import org.xbmc.kore.ui.generic.CastFragment;
-import org.xbmc.kore.ui.generic.RefreshItem;
 import org.xbmc.kore.utils.FileDownloadHelper;
 import org.xbmc.kore.utils.LogUtils;
 import org.xbmc.kore.utils.MediaPlayerUtils;
@@ -73,17 +71,22 @@ public class MovieInfoFragment extends AbstractInfoFragment
     private FileDownloadHelper.MovieInfo movieDownloadInfo;
 
     @Override
-    protected RefreshItem createRefreshItem() {
-        RefreshItem refreshItem = new RefreshItem(requireContext(),
-                                                  LibrarySyncService.SYNC_SINGLE_MOVIE);
-        refreshItem.setSyncItem(LibrarySyncService.SYNC_MOVIEID, getDataHolder().getId());
-        refreshItem.setListener(event -> {
-            if (event.status == MediaSyncEvent.STATUS_SUCCESS) {
-                LoaderManager.getInstance(this).restartLoader(LOADER_MOVIE, null, MovieInfoFragment.this);
-            }
-        });
+    protected String getSyncType() {
+        return LibrarySyncService.SYNC_SINGLE_MOVIE;
+    }
 
-        return refreshItem;
+    @Override
+    protected Bundle getSyncExtras() {
+        Bundle bundle = new Bundle();
+        bundle.putInt(LibrarySyncService.SYNC_MOVIEID, getDataHolder().getId());
+        return bundle;
+    }
+
+    @Override
+    protected void onSyncProcessEnded(MediaSyncEvent event) {
+        if (event.status == MediaSyncEvent.STATUS_SUCCESS) {
+            LoaderManager.getInstance(this).restartLoader(LOADER_MOVIE, null, this);
+        }
     }
 
     @Override
@@ -130,7 +133,7 @@ public class MovieInfoFragment extends AbstractInfoFragment
                 public void onSuccess(String result) {
                     if (!isAdded()) return;
                     // Force a refresh, but don't show a message
-                    getRefreshItem().startSync(true);
+                    startSync(true);
                     moviePlaycount = newPlaycount;
                     setWatchedButtonState(newPlaycount > 0);
                 }
@@ -153,13 +156,12 @@ public class MovieInfoFragment extends AbstractInfoFragment
     }
 
     @Override
-    protected boolean setupFAB(FloatingActionButton fab) {
-        fab.setOnClickListener(v -> {
+    protected View.OnClickListener getFABClickListener() {
+        return (v -> {
             PlaylistType.Item item = new PlaylistType.Item();
             item.movieid = getDataHolder().getId();
             playItemOnKodi(item);
         });
-        return true;
     }
 
     @Override
@@ -234,7 +236,7 @@ public class MovieInfoFragment extends AbstractInfoFragment
 
                     movieDownloadInfo = new FileDownloadHelper.MovieInfo(
                             dataHolder.getTitle(), cursor.getString(MovieDetailsQuery.FILE));
-                    setDownloadButtonState(movieDownloadInfo.downloadDirectoryExists());
+                    //setDownloadButtonState(movieDownloadInfo.downloadDirectoryExists());
                     setWatchedButtonState(cursor.getInt(MovieDetailsQuery.PLAYCOUNT) > 0);
                     updateView(dataHolder);
                     checkOutdatedMovieDetails(cursor);
@@ -250,7 +252,7 @@ public class MovieInfoFragment extends AbstractInfoFragment
     }
 
     @Override
-    protected AbstractAdditionalInfoFragment getAdditionalInfoFragment() {
+    protected AbstractFragment getAdditionalInfoFragment() {
         CastFragment castFragment = new CastFragment();
         castFragment.setArgs(getDataHolder().getId(), getDataHolder().getTitle(),
                              CastFragment.TYPE.MOVIE);
@@ -273,7 +275,7 @@ public class MovieInfoFragment extends AbstractInfoFragment
         if (System.currentTimeMillis() > lastUpdated + Settings.DB_UPDATE_INTERVAL) {
             // Trigger a silent refresh
             hasIssuedOutdatedRefresh = true;
-            getRefreshItem().startSync(true);
+            startSync(true);
         }
     }
 

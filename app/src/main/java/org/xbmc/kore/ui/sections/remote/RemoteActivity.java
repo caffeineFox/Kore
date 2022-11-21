@@ -25,13 +25,12 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.ViewTreeObserver;
 import android.view.WindowManager;
-import android.widget.Toast;
 
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.text.TextDirectionHeuristicsCompat;
 import androidx.preference.PreferenceManager;
-import androidx.viewpager.widget.ViewPager;
+import androidx.viewpager2.widget.ViewPager2;
 
 import org.xbmc.kore.R;
 import org.xbmc.kore.Settings;
@@ -57,7 +56,8 @@ import org.xbmc.kore.utils.LogUtils;
 import org.xbmc.kore.utils.TabsAdapter;
 import org.xbmc.kore.utils.UIUtils;
 
-public class RemoteActivity extends BaseActivity
+public class RemoteActivity
+        extends BaseActivity
         implements HostConnectionObserver.PlayerEventsObserver,
         NowPlayingFragment.NowPlayingListener,
         SendTextDialogFragment.SendTextDialogListener,
@@ -67,19 +67,21 @@ public class RemoteActivity extends BaseActivity
     private static final int NOWPLAYING_FRAGMENT_ID = 1;
     private static final int REMOTE_FRAGMENT_ID = 2;
     private static final int PLAYLIST_FRAGMENT_ID = 3;
-
+    OnApplyWindowInsetsListener bottomInsetsListener = (v, windowInsets) -> {
+        ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) v.getLayoutParams();
+        mlp.bottomMargin = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom;
+        v.setLayoutParams(mlp);
+        return windowInsets;
+    };
     /**
      * Host manager singleton
      */
     private HostManager hostManager = null;
-
     /**
      * To register for observing host events
      */
     private HostConnectionObserver hostConnectionObserver;
-
     private NavigationDrawerFragment navigationDrawerFragment;
-
     private ActivityRemoteBinding binding;
     // Default page change listener, that doesn't scroll images
     ViewPager.OnPageChangeListener defaultOnPageChangeListener = new ViewPager.OnPageChangeListener() {
@@ -96,10 +98,41 @@ public class RemoteActivity extends BaseActivity
         public void onPageScrollStateChanged(int state) {
         }
     };
+    // Default page change listener, that doesn't scroll images
+    ViewPager2.OnPageChangeCallback defaultOnPageChangeCallback = new ViewPager2.OnPageChangeCallback() {
+        @Override
+        public void onPageSelected(int position) {
+            setToolbarTitle(binding.defaultToolbar, position);
+        }
+    };
+    binding =ActivityRemoteBinding.inflate(
     /**
      * HostConnectionObserver.PlayerEventsObserver interface callbacks
      */
-    private String lastImageUrl = null;
+    private String lastImageUrl = null;);
+
+    {
+        ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) v.getLayoutParams();
+        mlp.topMargin = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars()).top;
+        v.setLayoutParams(mlp);
+        return windowInsets;
+    });
+
+    // Set activity to full screen and protect the top app bar and the content from the top/bottom insets
+        WindowCompat.setDecorFitsSystemWindows(
+
+    getLayoutInflater() false);
+
+        ViewCompat.setOnApplyWindowInsetsListener(binding.defaultToolbar,(v,windowInsets)->
+
+    setContentView(binding.getRoot());
+
+getWindow(),
+
+        ViewCompat.setOnApplyWindowInsetsListener(binding.pager,bottomInsetsListener);
+        ViewCompat.setOnApplyWindowInsetsListener(binding.navigationDrawer,bottomInsetsListener);
+
+    // Set up the drawer.
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -107,9 +140,6 @@ public class RemoteActivity extends BaseActivity
 
         // Set default values for the preferences
         PreferenceManager.setDefaultValues(this, R.xml.preferences, false);
-
-        binding = ActivityRemoteBinding.inflate(getLayoutInflater());
-        setContentView(binding.getRoot());
 
         hostManager = HostManager.getInstance(this);
 
@@ -130,17 +160,16 @@ public class RemoteActivity extends BaseActivity
             navigationDrawerFragment.setUp(R.id.navigation_drawer, findViewById(R.id.drawer_layout));
 
         // Set up pager and fragments
-        TabsAdapter tabsAdapter = new TabsAdapter(this, getSupportFragmentManager())
+        TabsAdapter tabsAdapter = new TabsAdapter(this)
                 .addTab(NowPlayingFragment.class, null, R.string.now_playing, NOWPLAYING_FRAGMENT_ID)
                 .addTab(RemoteFragment.class, null, R.string.remote, REMOTE_FRAGMENT_ID)
                 .addTab(PlaylistFragment.class, null, R.string.playlist, PLAYLIST_FRAGMENT_ID);
 
         binding.pager.setAdapter(tabsAdapter);
-        binding.pagerIndicator.setViewPager(binding.pager);
-        binding.pagerIndicator.setOnPageChangeListener(defaultOnPageChangeListener);
-
-        binding.pager.setCurrentItem(1);
+        binding.pager.setCurrentItem(1, false);
         binding.pager.setOffscreenPageLimit(2);
+        binding.pager.registerOnPageChangeCallback(defaultOnPageChangeCallback);
+        binding.pagerIndicator.setViewPager(binding.pager);
 
         setupActionBar();
 
@@ -300,8 +329,8 @@ public class RemoteActivity extends BaseActivity
     }
 
     private void setupActionBar() {
-        setToolbarTitle(binding.includeToolbar.defaultToolbar, NOWPLAYING_FRAGMENT_ID);
-        setSupportActionBar(binding.includeToolbar.defaultToolbar);
+        setToolbarTitle(binding.defaultToolbar, NOWPLAYING_FRAGMENT_ID);
+        setSupportActionBar(binding.defaultToolbar);
 
         ActionBar actionBar = getSupportActionBar();
         if (actionBar == null) return;
@@ -348,7 +377,7 @@ public class RemoteActivity extends BaseActivity
                             int offsetX = (binding.pager.getCurrentItem() - 1) * pixelsPerPage;
                             binding.backgroundImage.scrollTo(offsetX, 0);
 
-                            binding.pagerIndicator.setOnPageChangeListener(new ViewPager.OnPageChangeListener() {
+                            binding.pager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
                                 @Override
                                 public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {
                                     int offsetX = (int) ((position - 1 + positionOffset) * pixelsPerPage);
@@ -357,11 +386,7 @@ public class RemoteActivity extends BaseActivity
 
                                 @Override
                                 public void onPageSelected(int position) {
-                                    setToolbarTitle(binding.includeToolbar.defaultToolbar, position);
-                                }
-
-                                @Override
-                                public void onPageScrollStateChanged(int state) {
+                                    setToolbarTitle(binding.defaultToolbar, position);
                                 }
                             });
 
@@ -370,16 +395,15 @@ public class RemoteActivity extends BaseActivity
                     });
         } else {
             binding.backgroundImage.setImageDrawable(null);
-            binding.pagerIndicator.setOnPageChangeListener(defaultOnPageChangeListener);
+            binding.pager.registerOnPageChangeCallback(defaultOnPageChangeCallback);
         }
     }
 
     @Override
-    public void playerOnPropertyChanged(org.xbmc.kore.jsonrpc.notification.Player.NotificationsData notificationsData) {
-
+    public void onPlayerPropertyChanged(org.xbmc.kore.jsonrpc.notification.Player.NotificationsData notificationsData) {
     }
 
-    public void playerOnPlay(PlayerType.GetActivePlayersReturnType getActivePlayerResult,
+    public void onPlayerPlay(PlayerType.GetActivePlayersReturnType getActivePlayerResult,
                              PlayerType.PropertyValue getPropertiesResult,
                              ListType.ItemsAll getItemResult) {
         String imageUrl = (TextUtils.isEmpty(getItemResult.fanart)) ?
@@ -388,44 +412,41 @@ public class RemoteActivity extends BaseActivity
             setImageViewBackground(imageUrl);
         }
         lastImageUrl = imageUrl;
-
         MediaSessionService.startIfNotRunning(this);
     }
 
-    public void playerOnPause(PlayerType.GetActivePlayersReturnType getActivePlayerResult,
+    public void onPlayerPause(PlayerType.GetActivePlayersReturnType getActivePlayerResult,
                               PlayerType.PropertyValue getPropertiesResult,
                               ListType.ItemsAll getItemResult) {
-        playerOnPlay(getActivePlayerResult, getPropertiesResult, getItemResult);
+        onPlayerPlay(getActivePlayerResult, getPropertiesResult, getItemResult);
     }
 
-    public void playerOnStop() {
-        LogUtils.LOGD(TAG, "Player stopping");
+    public void onPlayerStop() {
         if (lastImageUrl != null) {
             setImageViewBackground(null);
         }
         lastImageUrl = null;
     }
 
-    public void playerNoResultsYet() {
-        // Do nothing
+    public void onPlayerNoResultsYet() {
     }
 
-    public void playerOnConnectionError(int errorCode, String description) {
-        playerOnStop();
+    public void onPlayerConnectionError(int errorCode, String description) {
+        onPlayerStop();
     }
 
-    public void systemOnQuit() {
-        Toast.makeText(this, R.string.xbmc_quit, Toast.LENGTH_SHORT).show();
-        playerOnStop();
+    public void onSystemQuit() {
+        UIUtils.showSnackbar(findViewById(android.R.id.content), R.string.xbmc_quit);
+        onPlayerStop();
     }
 
-    public void inputOnInputRequested(String title, String type, String value) {
+    public void onInputRequested(String title, String type, String value) {
         SendTextDialogFragment dialog =
                 SendTextDialogFragment.newInstance(title);
         dialog.show(getSupportFragmentManager(), null);
     }
 
-    public void observerOnStopObserving() {
+    public void onObserverStopObserving() {
     }
 
     /**

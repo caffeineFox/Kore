@@ -26,7 +26,6 @@ import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.os.Build;
 import android.os.Bundle;
-import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -44,6 +43,7 @@ import org.xbmc.kore.host.HostManager;
 import org.xbmc.kore.service.MediaSessionService;
 import org.xbmc.kore.ui.sections.remote.RemoteActivity;
 import org.xbmc.kore.utils.LogUtils;
+import org.xbmc.kore.utils.UIUtils;
 import org.xbmc.kore.utils.Utils;
 
 import java.lang.reflect.Method;
@@ -62,8 +62,8 @@ public class SettingsFragment extends PreferenceFragmentCompat
     private final ActivityResultLauncher<String> phonePermissionLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
                 if (!isGranted) {
-                    Toast.makeText(requireContext(), R.string.read_phone_state_permission_denied, Toast.LENGTH_SHORT)
-                         .show();
+                    UIUtils.showSnackbar(getListView(),
+                                         R.string.read_phone_state_permission_denied);
                     TwoStatePreference pauseCallPreference = findPreference(Settings.KEY_PREF_PAUSE_DURING_CALLS);
                     if (pauseCallPreference != null) pauseCallPreference.setChecked(false);
                 }
@@ -120,16 +120,6 @@ public class SettingsFragment extends PreferenceFragmentCompat
         }
 
         setupPreferences();
-
-        ListPreference languagePref = findPreference(Settings.KEY_PREF_LANGUAGE);
-        if (languagePref != null) {
-            Locale currentLocale = getCurrentLocale();
-            languagePref.setSummary(currentLocale.getDisplayLanguage(currentLocale));
-            languagePref.setOnPreferenceClickListener(preference -> {
-                setupLanguagePreference((ListPreference) preference);
-                return true;
-            });
-        }
     }
 
     @Override
@@ -155,8 +145,10 @@ public class SettingsFragment extends PreferenceFragmentCompat
         setupPreferences();
         Context ctx = requireContext();
 
-        if (key.equals(Settings.KEY_PREF_THEME) || key.equals(Settings.getNavDrawerItemsPrefKey(hostId))
-            || key.equals((Settings.getRemoteBarItemsPrefKey(hostId)))) {
+        if (key.equals(Settings.KEY_PREF_THEME_COLOR) ||
+            key.equals(Settings.KEY_PREF_THEME_VARIANT) ||
+            key.equals(Settings.getNavDrawerItemsPrefKey(hostId)) ||
+            key.equals((Settings.getRemoteBarItemsPrefKey(hostId)))) {
             // restart to apply new theme (actually build an entirely new task stack)
             TaskStackBuilder.create(ctx)
                             .addNextIntent(new Intent(ctx, RemoteActivity.class))
@@ -192,10 +184,40 @@ public class SettingsFragment extends PreferenceFragmentCompat
      * Sets up the preferences state and summaries
      */
     private void setupPreferences() {
-        // Theme preferences
-        ListPreference themePref = findPreference(Settings.KEY_PREF_THEME);
-        if (themePref != null) themePref.setSummary(themePref.getEntry());
         Context context = requireContext();
+
+        // Theme preferences
+        ListPreference themeColorPref = findPreference(Settings.KEY_PREF_THEME_COLOR);
+        if (themeColorPref != null) {
+            // Depending on the Android version we need to show different entries and values
+            if (Utils.isSOrLater()) {
+                themeColorPref.setEntries(R.array.theme_colors_array);
+                themeColorPref.setEntryValues(R.array.theme_colors_values_array);
+            } else {
+                themeColorPref.setEntries(R.array.theme_colors_array_pre_S);
+                themeColorPref.setEntryValues(R.array.theme_colors_values_array_pre_S);
+            }
+            themeColorPref.setSummary(themeColorPref.getEntry());
+        }
+        ListPreference themeVariantPref = findPreference(Settings.KEY_PREF_THEME_VARIANT);
+        if (themeVariantPref != null) themeVariantPref.setSummary(themeVariantPref.getEntry());
+
+        // Language preference
+        ListPreference languagePref = findPreference(Settings.KEY_PREF_LANGUAGE);
+        if (languagePref != null) {
+            Locale currentLocale = getCurrentLocale();
+            languagePref.setSummary(currentLocale.getDisplayLanguage(currentLocale));
+            languagePref.setOnPreferenceClickListener(preference -> {
+                setupLanguagePreference((ListPreference) preference);
+                return true;
+            });
+        }
+
+        // Use hardware volume keys
+        ListPreference useHWVolKeysPref = findPreference(Settings.KEY_PREF_USE_HW_VOL_KEYS);
+        if (useHWVolKeysPref != null) {
+            useHWVolKeysPref.setSummary(useHWVolKeysPref.getEntry());
+        }
 
         // About preference
         String nameAndVersion = context.getString(R.string.app_name);

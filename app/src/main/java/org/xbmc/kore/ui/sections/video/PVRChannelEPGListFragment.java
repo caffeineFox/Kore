@@ -25,7 +25,6 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -38,7 +37,6 @@ import org.xbmc.kore.jsonrpc.ApiCallback;
 import org.xbmc.kore.jsonrpc.method.PVR;
 import org.xbmc.kore.jsonrpc.type.PVRType;
 import org.xbmc.kore.ui.AbstractSearchableFragment;
-import org.xbmc.kore.ui.viewgroups.RecyclerViewEmptyViewSupport;
 import org.xbmc.kore.utils.LogUtils;
 import org.xbmc.kore.utils.UIUtils;
 
@@ -51,7 +49,8 @@ import java.util.Locale;
 /**
  * Fragment that presents the Guide for a channel
  */
-public class PVRChannelEPGListFragment extends AbstractSearchableFragment
+public class PVRChannelEPGListFragment
+        extends AbstractSearchableFragment
         implements SwipeRefreshLayout.OnRefreshListener {
     private static final String TAG = LogUtils.makeLogTag(PVRChannelEPGListFragment.class);
 
@@ -63,24 +62,10 @@ public class PVRChannelEPGListFragment extends AbstractSearchableFragment
      */
     private final Handler callbackHandler = new Handler(Looper.getMainLooper());
 
-    private static final String BUNDLE_KEY_CHANNELID = "bundle_key_channelid";
-
-    /**
-     * Create a new instance of this, initialized to show the current channel
-     */
-    public static PVRChannelEPGListFragment newInstance(Integer channelId) {
-        PVRChannelEPGListFragment fragment = new PVRChannelEPGListFragment();
-
-        Bundle args = new Bundle();
-        args.putInt(BUNDLE_KEY_CHANNELID, channelId);
-        fragment.setArguments(args);
-        return fragment;
-    }
+    public static final String BUNDLE_KEY_CHANNELID = "bundle_key_channelid";
 
     @Override
-    protected RecyclerViewEmptyViewSupport.OnItemClickListener createOnItemClickListener() {
-        return (view, position) -> {
-        };
+    protected void onListItemClicked(View view, int position) {
     }
 
     @Override
@@ -89,8 +74,12 @@ public class PVRChannelEPGListFragment extends AbstractSearchableFragment
     }
 
     @Override
+    protected String getEmptyResultsTitle() { return getString(R.string.no_broadcasts_found_refresh); }
+
+    @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        hostManager = HostManager.getInstance(requireContext());
     }
 
     @Override
@@ -99,18 +88,10 @@ public class PVRChannelEPGListFragment extends AbstractSearchableFragment
 
         Bundle bundle = getArguments();
         channelId = (bundle == null) ? -1 : bundle.getInt(BUNDLE_KEY_CHANNELID, -1);
-
         if (channelId == -1) {
             // There's nothing to show
             return null;
         }
-
-        hostManager = HostManager.getInstance(requireContext());
-
-        binding.swipeRefreshLayout.setOnRefreshListener(this);
-
-        TextView emptyView = getEmptyView();
-        emptyView.setOnClickListener(v -> onRefresh());
 
         return root;
     }
@@ -134,9 +115,8 @@ public class PVRChannelEPGListFragment extends AbstractSearchableFragment
         if (hostManager.getHostInfo() != null) {
             browseEPG();
         } else {
-            binding.swipeRefreshLayout.setRefreshing(false);
-            Toast.makeText(requireContext(), R.string.no_xbmc_configured, Toast.LENGTH_SHORT)
-                 .show();
+            hideRefreshAnimation();
+            UIUtils.showSnackbar(getView(), R.string.no_xbmc_configured);
         }
     }
 
@@ -154,9 +134,6 @@ public class PVRChannelEPGListFragment extends AbstractSearchableFragment
             @Override
             public void onSuccess(List<PVRType.DetailsBroadcast> result) {
                 if (!isAdded()) return;
-                // To prevent the empty text from appearing on the first load, set it now
-                TextView emptyView = getEmptyView();
-                emptyView.setText(getString(R.string.no_broadcasts_found_refresh));
 
                 List<PVRType.DetailsBroadcast> finalResult = filter(result);
 
@@ -168,12 +145,7 @@ public class PVRChannelEPGListFragment extends AbstractSearchableFragment
             public void onError(int errorCode, String description) {
                 if (!isAdded()) return;
                 LogUtils.LOGD(TAG, "Error getting broadcasts: " + description);
-                // To prevent the empty text from appearing on the first load, set it now
-                TextView emptyView = getEmptyView();
-                emptyView.setText(String.format(getString(R.string.error_getting_pvr_info), description));
-                Toast.makeText(requireContext(),
-                               String.format(getString(R.string.error_getting_pvr_info), description),
-                               Toast.LENGTH_SHORT).show();
+                showStatusMessage(null, String.format(getString(R.string.error_getting_pvr_info), description));
                 hideRefreshAnimation();
             }
         }, callbackHandler);

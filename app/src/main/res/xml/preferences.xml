@@ -28,10 +28,12 @@
             android:title="@string/keep_remote_above_lockscreen"
             android:defaultValue="false"/>
 
-        <SwitchPreferenceCompat
-            android:key="pref_use_hardware_volume_keys"
+        <ListPreference
+            android:key="pref_use_hw_vol_keys"
             android:title="@string/use_hardware_volume_keys"
-            android:defaultValue="true"/>
+            android:entries="@array/use_hw_vol_keys_array"
+            android:entryValues="@array/use_hw_vol_keys_array_values_array"
+            android:defaultValue="never"/>
 
         <SwitchPreferenceCompat
             android:key="pref_vibrate_remote_buttons"
@@ -57,14 +59,24 @@
 
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="@string/application">
+    <PreferenceCategory android:title="@string/theme">
         <ListPreference
-            android:key="pref_theme"
-            android:title="@string/theme"
-            android:entries="@array/themes_array"
-            android:entryValues="@array/themes_values_array"
-            android:defaultValue="9"/>
+            android:key="pref_theme_color"
+            android:title="@string/theme_color"
+            android:entries="@array/theme_colors_array"
+            android:entryValues="@array/theme_colors_values_array"
+            android:defaultValue="kore"/>
 
+        <ListPreference
+            android:key="pref_theme_variant"
+            android:title="@string/theme_variant"
+            android:entries="@array/theme_variants_array"
+            android:entryValues="@array/theme_variants_values_array"
+            android:defaultValue="auto"/>
+
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/application">
         <ListPreference
             android:key="pref_language"
             android:title="@string/language"/>

@@ -20,6 +20,7 @@ import android.app.Service;
 import android.content.ContentResolver;
 import android.os.Handler;
 
+import org.greenrobot.eventbus.EventBus;
 import org.xbmc.kore.host.HostInfo;
 import org.xbmc.kore.host.HostConnection;
 import org.xbmc.kore.jsonrpc.event.MediaSyncEvent;
@@ -27,8 +28,6 @@ import org.xbmc.kore.utils.LogUtils;
 
 import java.util.ArrayDeque;
 import java.util.Iterator;
-
-import de.greenrobot.event.EventBus;
 
 public class SyncOrchestrator {
     public static final String TAG = LogUtils.makeLogTag(SyncOrchestrator.class);
@@ -135,7 +134,7 @@ public class SyncOrchestrator {
 
         EventBus.getDefault()
                 .post(new MediaSyncEvent(currentSyncItem.getSyncType(),
-                                         currentSyncItem.getSyncExtras(),
+                                         currentSyncItem.getSyncParams(),
                                          MediaSyncEvent.STATUS_SUCCESS));
 
         syncItems.remove(currentSyncItem);
@@ -156,7 +155,7 @@ public class SyncOrchestrator {
         //hostConnection.disconnect();
         EventBus.getDefault()
                 .post(new MediaSyncEvent(currentSyncItem.getSyncType(),
-                                         currentSyncItem.getSyncExtras(),
+                                         currentSyncItem.getSyncParams(),
                                          MediaSyncEvent.STATUS_FAIL, errorCode, description));
         // Keep syncing till the end
         nextSync();

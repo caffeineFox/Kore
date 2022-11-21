@@ -59,9 +59,17 @@ public class Settings {
      * Make sure these are the same as in preferences.xml
      */
 
+    //Theme color and variant constants, keep in sync to the defined in arrays.xml
+    public static final String THEME_VARIANT_LIGHT = "light", THEME_VARIANT_DARK = "dark", THEME_VARIANT_SYSTEM = "auto";
+    public static final String THEME_COLOR_KORE = "kore", THEME_COLOR_GREEN = "green",
+            THEME_COLOR_YELLOW = "yellow", THEME_COLOR_PURPLE = "purple", THEME_COLOR_SYSTEM = "system_colors";
+
     // Theme
-    public static final String KEY_PREF_THEME = "pref_theme";
-    public static final String DEFAULT_PREF_THEME = "0";
+    public static final String KEY_PREF_THEME_COLOR = "pref_theme_color";
+    public static final String DEFAULT_PREF_THEME_COLOR = THEME_COLOR_KORE;
+
+    public static final String KEY_PREF_THEME_VARIANT = "pref_theme_variant";
+    public static final String DEFAULT_PREF_THEME_VARIANT = THEME_VARIANT_SYSTEM;
 
     // Switch to remote
     public static final String KEY_PREF_SWITCH_TO_REMOTE_AFTER_MEDIA_START = "pref_switch_to_remote_after_media_start";
@@ -143,8 +151,11 @@ public class Settings {
     public static final boolean DEFAULT_PREF_ADDONS_FILTER_HIDE_DISABLED = false;
 
     // Use hardware volume keys to control volume
-    public static final String KEY_PREF_USE_HARDWARE_VOLUME_KEYS = "pref_use_hardware_volume_keys";
-    public static final boolean DEFAULT_PREF_USE_HARDWARE_VOLUME_KEYS = true;
+    public static final String USE_HW_VOL_KEYS_NEVER = "never", USE_HW_VOL_KEYS_ALWAYS = "always",
+            USE_HW_VOL_KEYS_WHEN_IN_FOREGROUND = "when_in_foreground";
+
+    public static final String KEY_PREF_USE_HW_VOL_KEYS = "pref_use_hw_vol_keys";
+    public static final String DEFAULT_PREF_USE_HW_VOL_KEYS = USE_HW_VOL_KEYS_NEVER;
 
     // Vibrate on remote button press
     public static final String KEY_PREF_VIBRATE_REMOTE_BUTTONS = "pref_vibrate_remote_buttons";
@@ -225,4 +236,50 @@ public class Settings {
     }
     public static final String DEFAULT_PREF_NAME_BOOKMARKED_ADDON = "Content";
 
+    /**
+     * Returns a theme resource Id given the value stored in Shared Preferences
+     * @param prefThemeColor Shared Preferences colour for the theme
+     * @param prefThemeVariant Shared Preferences variant for the theme
+     * @return Android resource id of the theme
+     */
+    public static int getThemeResourceId(String prefThemeColor, String prefThemeVariant) {
+        switch (prefThemeColor) {
+            case THEME_COLOR_YELLOW:
+                switch (prefThemeVariant) {
+                    case THEME_VARIANT_LIGHT:
+                        return R.style.Theme_Kore_Yellow_Light;
+                    case THEME_VARIANT_DARK:
+                        return R.style.Theme_Kore_Yellow_Dark;
+                    default:
+                        return R.style.Theme_Kore_Yellow_Auto;
+                }
+            case THEME_COLOR_PURPLE:
+                switch (prefThemeVariant) {
+                    case THEME_VARIANT_LIGHT:
+                        return R.style.Theme_Kore_Purple_Light;
+                    case THEME_VARIANT_DARK:
+                        return R.style.Theme_Kore_Purple_Dark;
+                    default:
+                        return R.style.Theme_Kore_Purple_Auto;
+                }
+            case THEME_COLOR_GREEN:
+                switch (prefThemeVariant) {
+                    case THEME_VARIANT_LIGHT:
+                        return R.style.Theme_Kore_Green_Light;
+                    case THEME_VARIANT_DARK:
+                        return R.style.Theme_Kore_Green_Dark;
+                    default:
+                        return R.style.Theme_Kore_Green_Auto;
+                }
+            default:  // "kore" and "system_colors" share this
+                switch (prefThemeVariant) {
+                    case THEME_VARIANT_LIGHT:
+                        return R.style.Theme_Kore_Default_Light;
+                    case THEME_VARIANT_DARK:
+                        return R.style.Theme_Kore_Default_Dark;
+                    default:
+                        return R.style.Theme_Kore_Default_Auto;
+                }
+        }
+    }
 }

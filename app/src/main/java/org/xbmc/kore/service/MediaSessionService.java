@@ -20,6 +20,7 @@ import android.os.Looper;
 import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.MediaSessionCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
+import android.view.Gravity;
 import android.view.KeyEvent;
 
 import androidx.core.app.NotificationCompat;
@@ -50,7 +51,7 @@ import org.xbmc.kore.utils.Utils;
  * This service creates and updates a {@link android.support.v4.media.session.MediaSessionCompat} and a
  * {@link android.app.Notification} while playback is playing on Kodi.
  *
- * It should be started as soon as playback is detected (tipically by an activity that receives callbacks
+ * It should be started as soon as playback is detected (typically by an activity that receives callbacks
  * from {@link HostConnectionObserver}).
  * The service keeps running in the foreground while something is playing, and stops itself as soon as playback
  * stops or a connection error is detected.
@@ -133,7 +134,6 @@ public class MediaSessionService extends Service
         // connection observer can be shared with the app, and notify it on the UI thread
         notificationManager = (NotificationManager)this.getSystemService(Context.NOTIFICATION_SERVICE);
         hostConnection = HostManager.getInstance(this).getConnection();
-        remoteVolumePC = new RemoteVolumeProviderCompat(hostConnection);
         PreferenceManager.getDefaultSharedPreferences(this).registerOnSharedPreferenceChangeListener(this);
 
         // Create the intent to start the remote when the user taps the notification
@@ -172,6 +172,7 @@ public class MediaSessionService extends Service
         mediaSession.setPlaybackState(stateBuilder.build());
 
         if (hardwareVolumeKeysEnabled()) {
+            remoteVolumePC = new RemoteVolumeProviderCompat(hostConnection);
             mediaSession.setPlaybackToRemote(remoteVolumePC);
         }
         metadataBuilder = new MediaMetadataCompat.Builder();
@@ -179,22 +180,20 @@ public class MediaSessionService extends Service
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        LogUtils.LOGD(TAG, "onStartCommand. Intent action: " + intent.getAction());
-
         // Given that the documentation for {@link MediaSessionCompat} and {@link MediaButtonReceiver} is somewhat
         // confusing, here's an explanation for the flow of creating/handling Media Button events from a notification
         // Media Button events are directly sent to {@link MediaSessionCompat}, calling its callbacks, but when creating
         // a notification, we need to set a {@link PendingIntent} with a Media Button event, and the way to do it is by
         // calling buildMediaButtonPendingIntent on MediaButtonReceiver. This will return a Pending Intent with the
         // given action, that directly calls the {@link MediaButtonReceiver} broadcast receiver (hence the need for
-        // declaring androidx.media.session.MediaButtonReceiver on the Manifest), not routing throug MediaSession.
+        // declaring androidx.media.session.MediaButtonReceiver on the Manifest), not routing through MediaSession.
         // That broadcast receiver tries to find a service on the Application that handles Intent.ACTION_MEDIA_BUTTON,
         // which is this service (hence the intent filter on the Manifest), and starts it, passing the intent.
         // Here we need to forward it to the callbacks defined on the {@link MediaSessionCompat}, which can be done
         // by calling MediaButtonReceiver.handleIntent(mediaSession, intent)
         // Note that other Media Button events are directly sent to the MediaSession callbacks, like for instance
         // button presses from a Android Wear connected phone.
-        if (intent.getAction() != null && intent.getAction().equals(Intent.ACTION_MEDIA_BUTTON)) {
+        if (intent != null && intent.getAction() != null && intent.getAction().equals(Intent.ACTION_MEDIA_BUTTON)) {
             KeyEvent ke = MediaButtonReceiver.handleIntent(mediaSession, intent);
             LogUtils.LOGD(TAG, "Got a Media Button Event: " + ke.toString());
             return super.onStartCommand(intent, flags, startId);
@@ -206,14 +205,14 @@ public class MediaSessionService extends Service
         HostConnectionObserver connectionObserver = HostManager.getInstance(this).getHostConnectionObserver();
         if (hostConnectionObserver == null || hostConnectionObserver != connectionObserver) {
             // New connection or there has been a change in hosts, in which case we need to unregister the previous one
-            if (hostConnectionObserver != null) hostConnectionObserver.unregisterPlayerObserver(this);
+            if (hostConnectionObserver != null) unregisterObservers();
             hostConnectionObserver = connectionObserver;
             hostConnectionObserver.registerPlayerObserver(this);
-            hostConnectionObserver.registerApplicationObserver(remoteVolumePC);
+            if (remoteVolumePC != null) hostConnectionObserver.registerApplicationObserver(remoteVolumePC);
         }
 
 
-        // Check whether we should react to phone state changes and wether we have permissions to do so
+        // Check whether we should react to phone state changes and weather we have permissions to do so
         boolean shouldPause = PreferenceManager
                 .getDefaultSharedPreferences(this)
                 .getBoolean(Settings.KEY_PREF_PAUSE_DURING_CALLS, Settings.DEFAULT_PREF_PAUSE_DURING_CALLS);
@@ -240,7 +239,7 @@ public class MediaSessionService extends Service
         isRunning = false;
         mediaSession.release();
         if (hostConnectionObserver != null) {
-            hostConnectionObserver.unregisterPlayerObserver(this);
+            unregisterObservers();
         }
         if (callStateListener != null) {
             callStateListener.stopListening();
@@ -263,13 +262,13 @@ public class MediaSessionService extends Service
 
     /* Ignore this */
     @Override
-    public void playerOnPropertyChanged(org.xbmc.kore.jsonrpc.notification.Player.NotificationsData notificationsData) {}
+    public void onPlayerPropertyChanged(org.xbmc.kore.jsonrpc.notification.Player.NotificationsData notificationsData) {}
 
     /**
      * HostConnectionObserver.PlayerEventsObserver interface callbacks
      */
     @Override
-    public void playerOnPlay(PlayerType.GetActivePlayersReturnType getActivePlayerResult,
+    public void onPlayerPlay(PlayerType.GetActivePlayersReturnType getActivePlayerResult,
                              PlayerType.PropertyValue getPropertiesResult,
                              ListType.ItemsAll getItemResult) {
         notifyPlaying(getActivePlayerResult, getPropertiesResult, getItemResult);
@@ -279,7 +278,7 @@ public class MediaSessionService extends Service
     }
 
     @Override
-    public void playerOnPause(PlayerType.GetActivePlayersReturnType getActivePlayerResult,
+    public void onPlayerPause(PlayerType.GetActivePlayersReturnType getActivePlayerResult,
                               PlayerType.PropertyValue getPropertiesResult,
                               ListType.ItemsAll getItemResult) {
         notifyPlaying(getActivePlayerResult, getPropertiesResult, getItemResult);
@@ -290,7 +289,7 @@ public class MediaSessionService extends Service
 
     private final Handler stopHandler = new Handler(Looper.myLooper());
     @Override
-    public void playerOnStop() {
+    public void onPlayerStop() {
         notifyNothingPlaying();
 
         // Stop service if nothing starts in a couple of seconds
@@ -301,26 +300,26 @@ public class MediaSessionService extends Service
     }
 
     @Override
-    public void playerNoResultsYet() {
+    public void onPlayerNoResultsYet() {
         notifyNothingPlaying();
     }
 
     @Override
-    public void playerOnConnectionError(int errorCode, String description) {
+    public void onPlayerConnectionError(int errorCode, String description) {
         stop("Connection Error: " + description);
     }
 
     @Override
-    public void systemOnQuit() {
+    public void onSystemQuit() {
         stop("System quit");
     }
 
     // Ignore
     @Override
-    public void inputOnInputRequested(String title, String type, String value) {}
+    public void onInputRequested(String title, String type, String value) {}
 
     @Override
-    public void observerOnStopObserving() {
+    public void onObserverStopObserving() {
         stop("Stop observing");
     }
 
@@ -351,7 +350,7 @@ public class MediaSessionService extends Service
         // Stop service
         LogUtils.LOGD(TAG, "Stopping media session service. Reason: " + reason);
         if (hostConnectionObserver != null) {
-            hostConnectionObserver.unregisterPlayerObserver(this);
+            unregisterObservers();
         }
         notificationManager.cancel(NOTIFICATION_ID);
         stopForeground(true);
@@ -469,7 +468,7 @@ public class MediaSessionService extends Service
         // Using targets is a lot more efficient than letting Picasso load it directly into the notification imageview,
         // which causes a lot of flickering
         //
-        // 2. The target needs to be static, because Picasso only keeps a weak reference to it, so we need to keed a
+        // 2. The target needs to be static, because Picasso only keeps a weak reference to it, so we need to keep a
         // strong reference and reset it to null when we're done. We also need to check if it is not null in case a
         // previous request hasn't finished yet.
         //
@@ -513,6 +512,7 @@ public class MediaSessionService extends Service
             hostManager.getPicasso()
                        .load(hostManager.getHostInfo().getImageUrl(poster))
                        .resize(posterWidth, posterHeight)
+                       .centerCrop(Gravity.CENTER)
                        .into(picassoTarget);
         }
     }
@@ -529,9 +529,10 @@ public class MediaSessionService extends Service
     }
 
     private boolean hardwareVolumeKeysEnabled() {
-        return PreferenceManager.getDefaultSharedPreferences(this)
-                .getBoolean(Settings.KEY_PREF_USE_HARDWARE_VOLUME_KEYS,
-                        Settings.DEFAULT_PREF_USE_HARDWARE_VOLUME_KEYS);
+        String useHWVolKeysPreferences = PreferenceManager.getDefaultSharedPreferences(this)
+                                                          .getString(Settings.KEY_PREF_USE_HW_VOL_KEYS,
+                                                                     Settings.DEFAULT_PREF_USE_HW_VOL_KEYS);
+        return useHWVolKeysPreferences.equals(Settings.USE_HW_VOL_KEYS_ALWAYS);
     }
 
     /**
@@ -541,12 +542,21 @@ public class MediaSessionService extends Service
      */
     @Override
     public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
-        if (Settings.KEY_PREF_USE_HARDWARE_VOLUME_KEYS.equals(key)) {
+        if (Settings.KEY_PREF_USE_HW_VOL_KEYS.equals(key)) {
             if (hardwareVolumeKeysEnabled()) {
+                remoteVolumePC = new RemoteVolumeProviderCompat(hostConnection);
                 mediaSession.setPlaybackToRemote(remoteVolumePC);
+                hostConnectionObserver.registerApplicationObserver(remoteVolumePC);
             } else {
                 mediaSession.setPlaybackToLocal(AudioManager.STREAM_MUSIC);
+                hostConnectionObserver.unregisterApplicationObserver(remoteVolumePC);
+                remoteVolumePC = null;
             }
         }
+    }
+
+    private void unregisterObservers() {
+        hostConnectionObserver.unregisterPlayerObserver(this);
+        if (remoteVolumePC != null) hostConnectionObserver.unregisterApplicationObserver(remoteVolumePC);
     }
 }
