@@ -174,10 +174,10 @@
     <string name="unwatched_status">Blm ditonton</string>
     <string name="watched_status">Ditonton</string>
     <string name="download">Unduh</string>
-    <string name="no_suitable_playlist">Tidak ditemukan daftar putar yang cocok untuk menambahkan jenis media.</string>
+    <string name="no_suitable_playlist">Tidak ditemukan antrean pemutaran yang cocok untuk menambahkan jenis media.</string>
     <string name="item_sent_to_kodi">Kirim ke Kodi</string>
-    <string name="item_added_to_playlist">Ditambahkan ke daftar putar</string>
-    <string name="add_to_playlist">Tambahkan ke daftar putar</string>
+    <string name="item_added_to_playlist">Ditambahkan ke antrian</string>
+    <string name="add_to_playlist">Antrian</string>
     <string name="action_search_music_videos">Cari video</string>
     <string name="action_search_genres">Cari aliran</string>
     <string name="action_search_artists">Cari artis</string>
@@ -207,8 +207,8 @@
     <string name="no_movies_found_refresh">Tidak ada film yang ditemukan</string>
     <string name="swipe_down_to_refresh">Geser ke bawah untuk menyegarkan</string>
     <string name="source_empty">Sumber media kosong</string>
-    <string name="clear_playlist">Hapus daftar putar</string>
-    <string name="playlist_empty">Daftar putar kosong</string>
+    <string name="clear_playlist">Hapus antrian</string>
+    <string name="playlist_empty">Antrian kosong</string>
     <string name="error_getting_playlist">Terjadi kesalahan saat mengambil daftar putar</string>
     <string name="general_error_executing_action">Kesalahan saat menjalankan tindakan: %1$s</string>
     <string name="remaining_cast_count">lebih %d</string>
@@ -246,7 +246,7 @@
     <string name="season_number">Musim %1$02d</string>
     <string name="season_episode">Musim %1$02d | Episode %2$02d</string>
     <string name="season_episode_abbrev">M%1$02dE%2$02d</string>
-    <string name="playlist">Daftarputar</string>
+    <string name="playlist">Antrian</string>
     <string name="remote">Remot</string>
     <string name="now_playing">Sedang diputar</string>
     <string name="nothing_playing">Tdk ada yng diputar</string>
@@ -336,9 +336,9 @@
     <string name="no_network_connection">Tdk ada koneksi jaringan</string>
     <string name="wizard_search_host_found">Saya menemukan sentra media ini di jaringan Anda.<br/><br/> Pilih satu untuk ditambahkan atau tekan <b>Berikutnya</b> untuk menambahkan yang baru secara manual.</string>
     <string name="wizard_search_no_network_connection">Harap aktifkan koneksi jaringan sebelum mencari pusat media.<br/></string>
-    <string name="wizard_search_no_host_found">Saya tidak dapat menemukan sentra media apa pun di jaringan Anda.&lt;br/&gt; Jika Anda memerlukan bantuan untuk mengonfigurasinya, periksa &lt;a href=http://syncedsynapse.com/kore/kore-faq/&gt;di sini&lt;/a&gt; .&lt;br/&gt;&lt;br/&gt; Klik &lt;b&gt;Cari lagi&lt;/b&gt; atau &lt;b&gt;Berikutnya&lt;/b&gt; untuk konfigurasi manual.</string>
+    <string name="wizard_search_no_host_found">Saya tidak dapat mencari sentra media apa pun dalam jaringan. &lt;br/&gt;&lt;br/&gt; Pastikan bahwa Kodi sedang berjalan dan diatur dengan benar. Secara khusus, periksa berikut dalam &lt;b&gt;Pengaturan&lt;/b&gt; Kodi: &lt;br/&gt;&lt;br/&gt; Pilih &lt;b&gt;Layanan&lt;/b&gt;, lalu &lt;b&gt;Kontrol&lt;/b&gt; dan: &lt;br/&gt; 1. Aktifkan &lt;b&gt;Perbolehkan pengendalian jarak jauh melalui HTTP&lt;/b&gt;; &lt;br/&gt; 2. Aktifkan kedua opsi &lt;b&gt;Perbolehkan pengendalian jarak jauh dari aplikasi di sistem ini&lt;/b&gt; dan &lt;b&gt;Perbolehkan pengendalian jarak jauh dari aplikasi di sistem lain&lt;/b&gt;; &lt;br/&gt;&lt;br/&gt; Pilih &lt;b&gt;Layanan&lt;/b&gt;, lalu &lt;b&gt;Umum&lt;/b&gt; dan: &lt;br&gt; 1. Aktifkan &lt;b&gt;Umumkan layanan ke sistem lain&lt;/b&gt;; &lt;br/&gt;&lt;br/&gt; Anda dapat menerima bantuan tambahan &lt;a href=http://syncedsynapse.com/kore/kore-faq/&gt;di sini&lt;/a&gt;. &lt;br/&gt;&lt;br/&gt; Klik &lt;b&gt;Cari lagi&lt;/b&gt; atau &lt;b&gt;Berikutnya&lt;/b&gt; untuk konfigurasi manual.</string>
     <string name="wizard_search_message">Mencari sentra media di jaringan lokal Anda…<br/></string>
-    <string name="wizard_welcome_message">Mari kita mulai dengan menambahkan sentra media. Pastikan Kodi Anda berjalan, dikonfigurasi dengan benar, dan di jaringan yang sama dengan perangkat Anda.&lt;br/&gt;&lt;br/&gt; Anda bisa mendapatkan bantuan untuk mengonfigurasinya &lt;a href=http://syncedsynapse.com/kore/kore-faq/&gt;di sini&lt;/a&gt; .&lt;br/&gt;&lt;br/&gt; Saat Anda siap, tekan &lt;b&gt;Berikutnya&lt;/b&gt; .</string>
+    <string name="wizard_welcome_message">Mari kita mulai dengan menambahkan sentra media. &lt;br/&gt; Pastikan bahwa Kodi sedang berjalan dan diatur dengan benar. Secara khusus, periksa berikut dalam &lt;b&gt;Pengaturan&lt;/b&gt; Kodi: &lt;br/&gt;&lt;br/&gt; Pilih &lt;b&gt;Layanan&lt;/b&gt;, lalu &lt;b&gt;Kontrol&lt;/b&gt; dan: &lt;br/&gt; 1. Aktifkan &lt;b&gt;Perbolehkan pengendalian jarak jauh di sistem ini&lt;/b&gt;; &lt;br/&gt; 2. Aktifkan kedua opsi &lt;b&gt;Perbolehkan pengendalian jarak jauh dari aplikasi di sistem ini&lt;/b&gt; dan &lt;b&gt;Perbolehkan pengendalian jarak jauh dari aplikasi di sistem lain&lt;/b&gt;; &lt;br/&gt;&lt;br/&gt; Pilih &lt;b&gt;Layanan&lt;/b&gt;, lalu &lt;b&gt;Umum&lt;/b&gt; dan: &lt;br&gt; 1. Aktifkan &lt;b&gt;Umumkan layanan ke sistem lain&lt;/b&gt;; &lt;br/&gt;&lt;br/&gt; Anda dapat menerima bantuan tambahan &lt;a href=http://syncedsynapse.com/kore/kore-faq/&gt;di sini&lt;/a&gt;. &lt;br/&gt;&lt;br/&gt; Ketika Anda siap, tekan &lt;b&gt;Berikutnya&lt;/b&gt;.</string>
     <string name="wizard_welcome">Selamat datang</string>
     <string name="connecting_to">Tak bisa terhubung ke %1$s (%2$s)
 \nMencoba lagi…</string>
@@ -369,7 +369,7 @@
     <string name="pvr">PVR</string>
     <string name="local_file_browser">Peramban Berkas Lokal</string>
     <string name="file_browser">Peramban Berkas Kodi</string>
-    <string name="unknown">Tidak dikenal</string>
+    <string name="unknown">Tdk Diketahui</string>
     <string name="script">Skrip</string>
     <string name="window">Jendela</string>
     <string name="media">Media</string>
@@ -387,4 +387,17 @@
     <string name="action_options">Opsi</string>
     <string name="settings">Pengaturan</string>
     <string name="theme_variant_light">Ringan</string>
+    <string name="use_hardware_volume_keys_when_in_foreground">Ketika Kore terbuka</string>
+    <string name="use_hardware_volume_keys_always">Selalu</string>
+    <string name="use_hardware_volume_keys_never">Tdk Akan</string>
+    <string name="theme_variant_dark">Gelap</string>
+    <string name="theme_variant_auto">Bawaan Sistem</string>
+    <string name="theme_variant">Variasi</string>
+    <string name="theme_color_purple">Ungu</string>
+    <string name="theme_color_yellow">Kuning Kapal selam</string>
+    <string name="theme_color_green">Hijau Mil</string>
+    <string name="theme_color_kore">Biru Velvet</string>
+    <string name="theme_color_system_colors">Warna Sistem</string>
+    <string name="theme_color">Skema Warna</string>
+    <string name="preferred_youtube_addon">Pengaya YouTube yang disukai</string>
 </resources>
