@@ -21,25 +21,31 @@ import android.os.Bundle;
 import android.view.KeyEvent;
 import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
+import android.widget.ArrayAdapter;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.fragment.app.DialogFragment;
+import androidx.preference.PreferenceManager;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import org.xbmc.kore.R;
-import org.xbmc.kore.databinding.DialogSendTextBinding;
+import org.xbmc.kore.Settings;
+import org.xbmc.kore.databinding.DialogCustomizeSeekButtonBinding;
+import org.xbmc.kore.jsonrpc.type.PlayerType;
+
+import java.util.ArrayList;
 
 /**
  * Dialog that allows the user to send text
  */
-public class SendTextDialogFragment extends DialogFragment {
+public class CustomizeSeekDialogFragment extends DialogFragment {
     private static final String TITLE_KEY = "TITLE";
 
     // The listener activity we will call when the user finishes the selection
-    private SendTextDialogListener mListener;
-    private DialogSendTextBinding binding;
+    private CustomizeSeekDialogListener mListener;
+    private DialogCustomizeSeekButtonBinding binding;
 
     /**
      * Create a new instance of the dialog, providing arguments.
@@ -47,8 +53,8 @@ public class SendTextDialogFragment extends DialogFragment {
      * @param title Title of the dialog
      * @return New dialog
      */
-    public static SendTextDialogFragment newInstance(String title) {
-        SendTextDialogFragment dialog = new SendTextDialogFragment();
+    public static CustomizeSeekDialogFragment newInstance(String title) {
+        CustomizeSeekDialogFragment dialog = new CustomizeSeekDialogFragment();
 
         Bundle args = new Bundle();
         args.putString(TITLE_KEY, title);
@@ -65,9 +71,9 @@ public class SendTextDialogFragment extends DialogFragment {
     public void onAttach(@NonNull Context context) {
         super.onAttach(context);
         try {
-            mListener = (SendTextDialogListener) context;
+            mListener = (CustomizeSeekDialogListener) context;
         } catch (ClassCastException e) {
-            throw new ClassCastException(context + " must implement SendTextDialogListener");
+            throw new ClassCastException(context + " must implement CustomizeSeekDialogListener");
         }
     }
 
@@ -82,59 +88,76 @@ public class SendTextDialogFragment extends DialogFragment {
     @SuppressWarnings("InflateParams")
     public Dialog onCreateDialog(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        int currentTime = PreferenceManager.getDefaultSharedPreferences(requireContext()).getInt(
+                Settings.KEY_PREF_CUSTOM_SEEK_TIME, Settings.DEFAULT_PREF_CUSTOM_SEEK_TIME);
+        int currentKind = PreferenceManager.getDefaultSharedPreferences(requireContext()).getInt(
+                Settings.KEY_PREF_CUSTOM_SEEK_KIND, Settings.DEFAULT_PREF_CUSTOM_SEEK_KIND);
 
         MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(requireContext());
 
         assert getArguments() != null;
-        final String title = getArguments().getString(TITLE_KEY, getString(R.string.send_text));
-        binding = DialogSendTextBinding.inflate(requireActivity().getLayoutInflater(), null, false);
+        final String title = getArguments().getString(TITLE_KEY, getString(R.string.customize_seek_button_title));
+        binding = DialogCustomizeSeekButtonBinding.inflate(requireActivity().getLayoutInflater(), null, false);
 
         builder.setTitle(title)
                 .setView(binding.getRoot())
-                .setPositiveButton(R.string.send, (dialog, which) -> {
-                    if (binding.textToSend.getText() != null)
-                        mListener.onSendTextFinished(binding.textToSend.getText().toString(),
-                                binding.finishAfterSend.isChecked());
+                .setPositiveButton(android.R.string.ok, (dialog, which) -> {
+                    customizationFinished();
                 })
-                .setNegativeButton(android.R.string.cancel, (dialog, which) -> mListener.onSendTextCancel());
+                .setNegativeButton(android.R.string.cancel, (dialog, which) -> mListener.onCustomizeSeekCancel());
 
         final Dialog dialog = builder.create();
-        binding.textToSend.setOnFocusChangeListener((v, hasFocus) -> {
+        binding.timeInput.setOnFocusChangeListener((v, hasFocus) -> {
             if (hasFocus) {
                 dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
             }
         });
-        binding.textToSend.requestFocus();
-        binding.textToSend.setOnEditorActionListener(new TextView.OnEditorActionListener() {
+        binding.timeInput.requestFocus();
+        binding.timeInput.setOnEditorActionListener(new TextView.OnEditorActionListener() {
             @Override
             public boolean onEditorAction(TextView v, int actionId, KeyEvent event) {
                 if (actionId == EditorInfo.IME_ACTION_SEND) {
-                    onSendTextFinished();
+                    onCustomizeSeekFinished();
                 }  // handles enter key on external keyboard, issue #99
                 else if (actionId == EditorInfo.IME_ACTION_UNSPECIFIED &&
                         (event != null && event.getAction() == KeyEvent.ACTION_DOWN && event.getKeyCode() == KeyEvent.KEYCODE_ENTER)) {
-                    onSendTextFinished();
+                    onCustomizeSeekFinished();
                 }
                 dialog.dismiss();
                 return false;
             }
 
-            private void onSendTextFinished() {
-                if (binding.textToSend.getText() != null)
-                    mListener.onSendTextFinished(binding.textToSend.getText().toString(),
-                            binding.finishAfterSend.isChecked());
+            private void onCustomizeSeekFinished() {
+                customizationFinished();
             }
         });
+        binding.timeInput.setText(String.valueOf(currentTime));
+
+        ArrayList<String> kindsOfSeek = new ArrayList<>();
+        kindsOfSeek.add(getString(R.string.kind_of_seek_jump_by));
+        kindsOfSeek.add(getString(R.string.kind_of_seek_jump_to));
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(requireContext(), android.R.layout.simple_list_item_1, kindsOfSeek);
+        binding.kindOfSeek.setAdapter(adapter);
+        binding.kindOfSeek.setText(getString(currentKind == 0 ? R.string.kind_of_seek_jump_by : R.string.kind_of_seek_jump_to), false);
+
         return dialog;
+    }
+
+    private void customizationFinished() {
+        if (binding.timeInput.getText() != null) {
+            PlayerType.KindOfSeek kindOfSeek = getString(R.string.kind_of_seek_jump_by).equals(binding.kindOfSeek.getText().toString())
+                    ? PlayerType.KindOfSeek.JUMP_BY : PlayerType.KindOfSeek.JUMP_TO;
+            mListener.onCustomizeSeekFinished(binding.timeInput.getText().toString(), kindOfSeek);
+        }
     }
 
     /**
      * Interface to pass events back to the calling activity
      * The calling activity must implement this interface
      */
-    public interface SendTextDialogListener {
-        void onSendTextFinished(String text, boolean done);
+    public interface CustomizeSeekDialogListener {
+        void onCustomizeSeekFinished(String time, PlayerType.KindOfSeek kindOfSeek);
 
-        void onSendTextCancel();
+        void onCustomizeSeekCancel();
     }
 }

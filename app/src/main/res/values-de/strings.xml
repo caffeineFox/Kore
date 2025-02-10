@@ -403,4 +403,12 @@
     <string name="theme_sun_dynamic">Dämmerungsdynamik</string>
     <string name="theme_default_dynamic">Tag/Nacht Dynamik</string>
     <string name="preferred_youtube_addon">Bevorzugtes YouTube Addon</string>
+    <string name="custom_seek_button">Einstellbaren Seek-Button anzeigen</string>
+    <string name="seek_by">Springe um</string>
+    <string name="customize_seek_button_title">Seek-Button einstellen</string>
+    <string name="kind_of_seek">Seek-Art</string>
+    <string name="kind_of_seek_jump_by">Springe um Zeit</string>
+    <string name="kind_of_seek_jump_to">Springe zu Zeitpunkt</string>
+    <string name="web_search">Websuche</string>
+    <string name="time_input">Zeit (Sekunden oder MM:SS)</string>
 </resources>

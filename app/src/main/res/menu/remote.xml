@@ -69,4 +69,8 @@
         android:title="@string/toggle_fullscreen"
         android:orderInCategory="4"
         app:showAsAction="never"/>
+    <item android:id="@+id/customize_seek_button"
+        android:title="@string/customize_seek_button_title"
+        android:orderInCategory="5"
+        app:showAsAction="never"/>
 </menu>

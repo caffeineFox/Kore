@@ -19,6 +19,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+
 import org.xbmc.kore.utils.JsonUtils;
 
 import java.util.ArrayList;
@@ -303,6 +304,15 @@ public class PlayerType {
             node.put(SECONDS, seconds);
             return node;
         }
+
+        public int toSeconds() {
+            int result = 0;
+            result += milliseconds > 499 ? 1 : 0;
+            result += seconds;
+            result += minutes * 60;
+            result += hours * 3600;
+            return result;
+        }
     }
 
     /**
@@ -328,6 +338,11 @@ public class PlayerType {
             time = new GlobalType.Time(node.get(TIME));
             totalTime = new GlobalType.Time(node.get(TOTAL_TIME));
         }
+    }
+
+    public enum KindOfSeek {
+        JUMP_BY,
+        JUMP_TO
     }
 
     /**
