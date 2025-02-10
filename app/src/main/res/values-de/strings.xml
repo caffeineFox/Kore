@@ -409,6 +409,5 @@
     <string name="kind_of_seek">Seek-Art</string>
     <string name="kind_of_seek_jump_by">Springe um Zeit</string>
     <string name="kind_of_seek_jump_to">Springe zu Zeitpunkt</string>
-    <string name="web_search">Websuche</string>
     <string name="time_input">Zeit (Sekunden oder MM:SS)</string>
 </resources>
