@@ -10,6 +10,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.content.pm.ServiceInfo;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.drawable.Drawable;
@@ -139,7 +140,7 @@ public class MediaSessionService extends Service
         // Create the intent to start the remote when the user taps the notification
         TaskStackBuilder stackBuilder = TaskStackBuilder.create(this);
         stackBuilder.addNextIntentWithParentStack(new Intent(this, RemoteActivity.class));
-        int flags = Utils.isMOrLater() ? PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT : PendingIntent.FLAG_UPDATE_CURRENT;
+        int flags = PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT;
         remoteStartPendingIntent = stackBuilder.getPendingIntent(0, flags);
 
         // Create the notification channel and the default notification
@@ -200,7 +201,11 @@ public class MediaSessionService extends Service
         }
 
         // Request foreground and show default notification, will update later
-        startForeground(NOTIFICATION_ID, nothingPlayingNotification);
+        if (Utils.isUpsideDownCakeOrLater()) {
+            startForeground(NOTIFICATION_ID, nothingPlayingNotification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
+        } else {
+            startForeground(NOTIFICATION_ID, nothingPlayingNotification);
+        }
 
         HostConnectionObserver connectionObserver = HostManager.getInstance(this).getHostConnectionObserver();
         if (hostConnectionObserver == null || hostConnectionObserver != connectionObserver) {

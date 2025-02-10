@@ -219,6 +219,12 @@ public class SettingsFragment extends PreferenceFragmentCompat
             useHWVolKeysPref.setSummary(useHWVolKeysPref.getEntry());
         }
 
+        // Preferred YouTube addon
+        ListPreference preferredYouTubeAddonPref = findPreference(Settings.KEY_PREF_YOUTUBE_ADDON_ID);
+        if (preferredYouTubeAddonPref != null) {
+            preferredYouTubeAddonPref.setSummary(preferredYouTubeAddonPref.getEntry());
+        }
+
         // About preference
         String nameAndVersion = context.getString(R.string.app_name);
         try {
@@ -294,13 +300,9 @@ public class SettingsFragment extends PreferenceFragmentCompat
     }
 
     private Locale getSystemLocale() {
-        return Utils.isNOrLater() ?
-               Resources.getSystem().getConfiguration().getLocales().get(0) :
-               Resources.getSystem().getConfiguration().locale;
+        return Resources.getSystem().getConfiguration().getLocales().get(0);
     }
 
     private Locale getCurrentLocale() {
-        return Utils.isNOrLater() ?
-               getResources().getConfiguration().getLocales().get(0) :
-               getResources().getConfiguration().locale;
+        return getResources().getConfiguration().getLocales().get(0);
     }}

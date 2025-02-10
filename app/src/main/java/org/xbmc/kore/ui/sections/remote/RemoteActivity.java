@@ -29,7 +29,6 @@ import android.view.WindowManager;
 
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.widget.Toolbar;
-import androidx.core.text.TextDirectionHeuristicsCompat;
 import androidx.core.view.OnApplyWindowInsetsListener;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
@@ -304,9 +303,6 @@ public class RemoteActivity
      * Callbacks from Send text dialog
      */
     public void onSendTextFinished(String text, boolean done) {
-        if (TextDirectionHeuristicsCompat.FIRSTSTRONG_LTR.isRtl(text, 0, text.length())) {
-            text = new StringBuilder(text).reverse().toString();
-        }
         Input.SendText action = new Input.SendText(text, done);
         action.execute(hostManager.getConnection(), null, null);
     }

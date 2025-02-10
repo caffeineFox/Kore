@@ -34,7 +34,6 @@
     <string name="artists">Artists</string>
     <string name="queue_action">Queue</string>
     <string name="action_search">Search</string>
-    <string name="playlist">Playlist</string>
     <string name="play_file">Play</string>
     <string name="queue_file">Queue</string>
     <string name="edit">Edit</string>
@@ -56,4 +55,6 @@
     <string name="theme_variant_dark">Dark</string>
     <string name="theme_variant_light">Light</string>
     <string name="use_hardware_volume_keys_never">Never</string>
+    <string name="add_to_playlist">Queue</string>
+    <string name="playlist">Queue</string>
 </resources>
